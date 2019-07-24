@@ -6,8 +6,24 @@ from botocore.client import Config
 import time, re
 
 
-REGION = 'us-east-1'
+#REGION = 'us-east-1'
 URL_EXPIRATION = 3600 # Seconds until URL expiration
+
+dotenv_path = join(dirname(__file__), '../.config')
+load_dotenv(dotenv_path)
+REGION = os.environ.get('REGION')
+BUCKET_NAME = os.environ.get('BUCKET_NAME')
+
+USER = os.environ.get('USER')
+USER_PASS = os.environ.get('USER_PASS')
+
+HOST = os.environ.get('HOST')
+DB_IDENTIFIER = os.environ.get('DB_IDENTIFIER')
+DB = os.environ.get('DB')
+TABLE = os.environ.get('TABLE')
+
+FILE_PREFIX = os.environ.get('FILE_PREFIX')
+FILE_SUFFIX = os.environ.get('FILE_SUFFIX')
 
 rds_c = boto3.client('rds', region_name=REGION)
 s3_c = boto3.client('s3', region_name=REGION)
