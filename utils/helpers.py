@@ -5,25 +5,8 @@ import psycopg2
 from botocore.client import Config
 import time, re
 
-
-#REGION = 'us-east-1'
+REGION = 'us-east-1'
 URL_EXPIRATION = 3600 # Seconds until URL expiration
-
-dotenv_path = join(dirname(__file__), '../.config')
-load_dotenv(dotenv_path)
-REGION = os.environ.get('REGION')
-BUCKET_NAME = os.environ.get('BUCKET_NAME')
-
-USER = os.environ.get('USER')
-USER_PASS = os.environ.get('USER_PASS')
-
-HOST = os.environ.get('HOST')
-DB_IDENTIFIER = os.environ.get('DB_IDENTIFIER')
-DB = os.environ.get('DB')
-TABLE = os.environ.get('TABLE')
-
-FILE_PREFIX = os.environ.get('FILE_PREFIX')
-FILE_SUFFIX = os.environ.get('FILE_SUFFIX')
 
 rds_c = boto3.client('rds', region_name=REGION)
 s3_c = boto3.client('s3', region_name=REGION)
@@ -109,7 +92,10 @@ def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
 
     return data
 
-def db_connect(db_identifier):
+def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
+    print('AAAAAAAAAAAAAAAAAA')
+    print(db_user)
+    print(db_user_pass)
     # Recover sepcific database through an identifier
     print('\n' + '************************************************************************')
     print('Recovering %s instance...' % db_identifier)
@@ -136,7 +122,7 @@ def db_connect(db_identifier):
             running = False
 
     try:
-        connection = psycopg2.connect(database="ptrdatabase", user = "ptrUser", password = "ptrPassword", host = "testdatabase.cb1rx8ymtxjb.us-east-1.rds.amazonaws.com", port = "5432")
+        connection = psycopg2.connect(database=db, user=db_user, password = db_user_pass, host = db_host, port = "5432")
         cursor = connection.cursor()
         # Print PostgreSQL version
         cursor.execute("SELECT version();")
@@ -157,3 +143,4 @@ def db_connect(db_identifier):
                 cursor.close()
                 connection.close()
                 print("PostgreSQL connection is closed")
+
