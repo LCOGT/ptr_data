@@ -3,7 +3,7 @@
 import boto3
 import psycopg2
 from botocore.client import Config
-import time, re
+import time, re, json
 
 REGION = 'us-east-1'
 URL_EXPIRATION = 3600 # Seconds until URL expiration
@@ -70,7 +70,7 @@ def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
         contents = read_s3_body(bucket, path)
         fits_line_length = 80
 
-        file_data = {}
+        data_entry = {}
         print('SCANNING: ' + path)
         for i in range(0, len(contents), fits_line_length): # Iterate through lines in file
             single_header_line = contents[i:i+fits_line_length].decode('utf8')
@@ -83,19 +83,69 @@ def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
                 attribute = values[0].strip()
                 attribute_value = values[1].replace("'", "").strip() # Attribute values are first stripped of single quotation marks before whitespace is removed.
                 
-                file_data[attribute] = attribute_value
+                data_entry[attribute] = attribute_value
             except:
                 if attribute == 'END':
                     break
-
-        data.append(file_data)
+        data_entry['JSON'] = json.dumps(data_entry)
+        data.append(data_entry)
 
     return data
 
-def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
-    print('AAAAAAAAAAAAAAAAAA')
-    print(db_user)
-    print(db_user_pass)
+# def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
+#     print('AAAAAAAAAAAAAAAAAA')
+#     print(db_user)
+#     print(db_user_pass)
+#     # Recover sepcific database through an identifier
+#     print('\n' + '************************************************************************')
+#     print('Recovering %s instance...' % db_identifier)
+#     running = True
+#     while running:
+#         response = rds_c.describe_db_instances(DBInstanceIdentifier=db_identifier)
+#         db_instances = response['DBInstances']
+
+#         if len(db_instances) != 1:
+#             raise Exception('More than one DB instance returned; make sure all database instances have unique identifiers')
+
+#         db_instance = db_instances[0]
+
+#         status = db_instance['DBInstanceStatus']
+#         print('DB status: %s' % status)
+
+#         time.sleep(5)
+#         if status == 'available':
+#             endpoint = db_instance['Endpoint']
+#             host = endpoint['Address']
+
+#             print('DB instance ready with host: %s' % host)
+#             print('************************************************************************' + '\n')
+#             running = False
+
+#     try:
+#         connection = psycopg2.connect(database=db, user=db_user, password = db_user_pass, host = db_host, port = "5432")
+#         cursor = connection.cursor()
+#         # Print PostgreSQL version
+#         cursor.execute("SELECT version();")
+#         record = cursor.fetchone()
+#         print("You are connected to - ", record,"\n")
+
+#         # Print tables in the databases
+#         cursor.execute("""SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'""")
+#         print('LIST OF TABLES IN DATABASE:')
+#         for table in cursor.fetchall():
+#             print(table)
+
+#     except (Exception, psycopg2.Error) as error :
+#         print ("Error while connecting to PostgreSQL:", error)
+#     finally:
+#         #closing database connection.
+#             if(connection):
+#                 cursor.close()
+#                 connection.close()
+#                 print("PostgreSQL connection is closed")
+
+
+def db_connect(db_identifier, db, db_user, db_user_pass, db_host, data):
     # Recover sepcific database through an identifier
     print('\n' + '************************************************************************')
     print('Recovering %s instance...' % db_identifier)
@@ -120,7 +170,11 @@ def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
             print('DB instance ready with host: %s' % host)
             print('************************************************************************' + '\n')
             running = False
-
+    ### INSERTING DATA
+    
+    
+    sql = "INSERT INTO image_data(img_name, observer, site, header) VALUES (%s, %s, %s, %s)"
+    connection = None
     try:
         connection = psycopg2.connect(database=db, user=db_user, password = db_user_pass, host = db_host, port = "5432")
         cursor = connection.cursor()
@@ -135,6 +189,22 @@ def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
         for table in cursor.fetchall():
             print(table)
 
+        # INSERT DATA
+        cursor.execute("DELETE FROM image_data")
+        for d in data:
+            attribute_values = []
+            attribute_values.extend([
+                d['FILENAME'],
+                d['OBSERVER'],
+                'WMD',
+                d['JSON']
+            ])
+            fname = d['FILENAME']
+
+            cursor.execute(sql,attribute_values)
+            print('ENTRY INSERTED: ' + fname)
+
+        connection.commit()
     except (Exception, psycopg2.Error) as error :
         print ("Error while connecting to PostgreSQL:", error)
     finally:
@@ -143,4 +213,3 @@ def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
                 cursor.close()
                 connection.close()
                 print("PostgreSQL connection is closed")
-

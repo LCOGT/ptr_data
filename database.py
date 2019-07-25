@@ -34,10 +34,11 @@ try:
 except Exception as e:
     print(e)
 
-helpers.db_connect(DB_IDENTIFIER, DB, DB_USER, DB_USER_PASS, DB_HOST)
 data = helpers.scan_s3_image_data(BUCKET_NAME,file_suffix='E00.txt')
+helpers.db_connect(DB_IDENTIFIER, DB, DB_USER, DB_USER_PASS, DB_HOST, data)
+
                 
-for k, v in data[0].items():
-    print(k, ":", v)
-print('***')
+# for k, v in data[0].items():
+#     print(k, ":", v)
+# print('***')
 
