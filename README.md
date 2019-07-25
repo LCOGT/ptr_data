@@ -34,18 +34,11 @@ Use the python package-management system in order to install required modules wi
 ### Populate required config files
 In order to run and test the database script, first find the .config file in the repo and change/fill out its fields accordingly.
 ```
-REGION = region
-BUCKET_NAME = name of bucket where image meta-data is stored
+DB_USER = username for database access
+DB_USER_PASS = password for database access
 
-USER = username for database access
-UESER_PASS = password for database access
-
-HOST = location of remote database instance to connect to
+DB_HOST = location of remote database instance to connect to
 DB_IDENTIFIER = name of database instance on rds
 DB = name of database to access
-TABLE = name of table to read/modify
-
-FILE_PREFIX = prefix to files returned by S3 scan
-FILE_SUFFIX = suffix to files returned by S3 scan
 ```
 Values for username and password for database access can be found on the LCOGT information spreadsheet.
