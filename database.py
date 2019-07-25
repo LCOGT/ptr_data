@@ -4,7 +4,6 @@ from utils import helpers
 import psycopg2
 import time, re
 import boto3
-import urllib.request
 from dotenv import load_dotenv
 import os
 from os.path import join, dirname
