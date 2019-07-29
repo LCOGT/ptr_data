@@ -5,11 +5,54 @@ import psycopg2
 from botocore.client import Config
 import time, re, json
 
+
 REGION = 'us-east-1'
 URL_EXPIRATION = 3600 # Seconds until URL expiration
 
 s3_c = boto3.client('s3', region_name=REGION)
 s3_r = boto3.resource('s3', region_name=REGION)
+
+
+def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
+    print('\nSEARCHING FOR IMAGE META-DATA STORED IN BUCKET: %s' % bucket)
+
+    data = []
+    for key in get_matching_s3_objects(bucket, prefix=file_prefix, suffix=file_suffix): 
+        path = key['Key']
+        header_file_data = scan_header_file(bucket, path)
+        data.append(header_file_data)
+
+    return data
+
+
+def scan_header_file(bucket, path):
+    data_entry = {}
+    fits_line_length = 80
+
+    contents = read_s3_body(bucket, path)
+    
+    print('SCANNING: ' + path)
+    for i in range(0, len(contents), fits_line_length):
+        single_header_line = contents[i:i+fits_line_length].decode('utf8')
+
+        # Split header lines according to the FITS header format
+        values = re.split('=|/|',single_header_line)
+        
+        try:
+            # Remove extra characters.  
+            attribute = values[0].strip()
+            attribute_value = values[1].replace("'", "").strip() 
+            
+            data_entry[attribute] = attribute_value
+        except:
+            if attribute == 'END':
+                break
+
+    # Add the JSON representation of the data_entry to itself as the header attribute
+    data_entry['JSON'] = json.dumps(data_entry)
+
+    return data_entry
+
 
 # Code from https://alexwlchan.net/2018/01/listing-s3-keys-redux/
 def get_matching_s3_objects(bucket, prefix='', suffix=''):
@@ -54,44 +97,9 @@ def get_matching_s3_objects(bucket, prefix='', suffix=''):
         except KeyError:
             break
 
+
 def read_s3_body(bucket_name, object_name):
     s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
     body = s3_object['Body']
 
     return body.read()
-
-def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
-    print('\nSEARCHING FOR IMAGE META-DATA STORED IN BUCKET: %s' % bucket)
-
-    # Parse through every matching text file returned from an S3 
-    # Each file corresponds to a dict stored in the returned list
-    data = []
-    fits_line_length = 80
-    for key in get_matching_s3_objects(bucket, prefix=file_prefix, suffix=file_suffix): 
-        path = key['Key']
-        contents = read_s3_body(bucket, path)
-
-        data_entry = {}
-        print('SCANNING: ' + path)
-        for i in range(0, len(contents), fits_line_length):
-            single_header_line = contents[i:i+fits_line_length].decode('utf8')
-
-            # Split line twice according to '=' and '/' characters
-            values = re.split('=|/|',single_header_line)
-            
-            try:
-                # Remove extra characters. Attribute values are first
-                # stripped of single quotation marks before whitespace is removed.   
-                attribute = values[0].strip()
-                attribute_value = values[1].replace("'", "").strip() 
-                
-                data_entry[attribute] = attribute_value
-            except:
-                if attribute == 'END':
-                    break
-
-        # Add the JSON representation of the data_entry to itself      
-        data_entry['JSON'] = json.dumps(data_entry)
-        data.append(data_entry)
-
-    return data

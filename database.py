@@ -1,12 +1,12 @@
 # database.py
 
 from utils import psql
-import psycopg2
 import time, re
 import boto3
 from dotenv import load_dotenv
 import os
 from os.path import join, dirname
+
 
 REGION = 'us-east-1'
 BUCKET_NAME = 'photonranch-001'
@@ -21,6 +21,8 @@ DB_HOST = os.environ.get('DB_HOST')
 DB_IDENTIFIER = os.environ.get('DB_IDENTIFIER')
 DB = os.environ.get('DB')
 
+
+# Ensure RDS database instance is available for connection
 print('\n' + '~~~~~~~~~~CONNECTING TO YOUR AWS-RDS DATABASE INSTANCES~~~~~~~~~~')
 print('Recovering %s instance...' % DB_IDENTIFIER)
 
@@ -47,6 +49,7 @@ while running:
 
         running = False
 
+# Connect to database and execute SQL queries
 if status == 'available':
     scan = psql.insert_all_header_files(DB, DB_USER, DB_USER_PASS, host)
 else:
