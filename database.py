@@ -1,6 +1,5 @@
 # database.py
 
-from utils import helpers
 from utils import psql
 import psycopg2
 import time, re
@@ -23,5 +22,34 @@ DB_IDENTIFIER = os.environ.get('DB_IDENTIFIER')
 DB = os.environ.get('DB')
 
 print('\n' + '~~~~~~~~~~CONNECTING TO YOUR AWS-RDS DATABASE INSTANCES~~~~~~~~~~')
-psql.db_connect(DB_IDENTIFIER, DB, DB_USER, DB_USER_PASS, DB_HOST)
+print('Recovering %s instance...' % DB_IDENTIFIER)
+
+rds_c = boto3.client('rds', region_name=REGION)
+
+running = True
+while running:
+    response = rds_c.describe_db_instances(DBInstanceIdentifier=DB_IDENTIFIER)
+    db_instances = response['DBInstances']
+
+    if len(db_instances) != 1:
+        raise Exception('More than one DB instance returned; make sure all database instances have unique identifiers')
+
+    db_instance = db_instances[0]
+
+    status = db_instance['DBInstanceStatus']
+    print('DB status: %s' % status)
+
+    time.sleep(5)
+    if status == 'available':
+        endpoint = db_instance['Endpoint']
+        host = endpoint['Address']
+        print('DB instance ready with host: %s' % host)
+
+        running = False
+
+if status == 'available':
+    scan = psql.insert_all_header_files(DB, DB_USER, DB_USER_PASS, host)
+else:
+    print("Unable to connect to the database.")
+
 

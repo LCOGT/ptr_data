@@ -1,79 +1,80 @@
-# aws.py
+# psql.py
 
 import boto3
 import psycopg2
-from botocore.client import Config
-import time, re, json
+import re
 from utils import aws
 
 REGION = 'us-east-1'
 BUCKET_NAME = 'photonranch-001'
 URL_EXPIRATION = 3600 # Seconds until URL expiration
 
-rds_c = boto3.client('rds', region_name=REGION)
+def insert_all_header_files(db, db_user, db_user_pass, db_host):
+    scan_complete = False
+    scanning_error = False
 
-def db_connect(db_identifier, db, db_user, db_user_pass, db_host):
-    # Recover sepcific database through an identifier
-    print('\n' + '************************************************************************')
-    print('Recovering %s instance...' % db_identifier)
-    running = True
-    while running:
-        response = rds_c.describe_db_instances(DBInstanceIdentifier=db_identifier)
-        db_instances = response['DBInstances']
-
-        if len(db_instances) != 1:
-            raise Exception('More than one DB instance returned; make sure all database instances have unique identifiers')
-
-        db_instance = db_instances[0]
-
-        status = db_instance['DBInstanceStatus']
-        print('DB status: %s' % status)
-
-        time.sleep(5)
-        if status == 'available':
-            endpoint = db_instance['Endpoint']
-            host = endpoint['Address']
-
-            print('DB instance ready with host: %s' % host)
-            running = False
-    ### INSERTING DATA
-    
-    sql = "INSERT INTO image_data(img_name, observer, site, header) VALUES (%s, %s, %s, %s)"
     connection = None
     try:
-        connection = psycopg2.connect(database=db, user=db_user, password = db_user_pass, host = db_host, port = "5432")
+        # Establish connection to the ptr archive
+        connection = psycopg2.connect(database=db, user=db_user, password=db_user_pass, host=db_host, port="5432")
         cursor = connection.cursor()
+
         # Print PostgreSQL version
         cursor.execute("SELECT version();")
         record = cursor.fetchone()
-        print("You are connected to - ", record)
-        print('************************************************************************' + '\n')
-
-        # INSERT DATA
-        cursor.execute("DELETE FROM image_data") # Clear old entries before scanning and adding new entries in
+        print("\nYou are connected to - ", record, "\n")
+        
+        # Clear old entries in database before rescanning
+        cursor.execute("DELETE FROM image_data") 
         print('***WARNING: DATABASE CLEARED***')
-        print('\n INSERTING DATA INTO DATABASE:')
 
+        # Insert header file data into the ptr archive
         data = aws.scan_s3_image_data(BUCKET_NAME,file_suffix='E00.txt')
-        for d in data:
-            attribute_values = []
-            attribute_values.extend([
-                d['FILENAME'],
-                d['OBSERVER'],
-                'WMD',
-                d['JSON']
-            ])
-            fname = d['FILENAME']
-
-            cursor.execute(sql,attribute_values)
-            print('---> ENTRY INSERTED: ' + fname)
-
+        for header in data:
+            scan = insert_header_file(header, cursor)
+            if scan == False:
+                scanning_error = True
         connection.commit()
+        
+        # Report on scanning results
+        if scanning_error == False:
+            print("Scanning completed successfully!")
+            scan_complete = True
+        else:
+            print("Scanning completed with errors.")
+
     except (Exception, psycopg2.Error) as error :
-        print ("Error while connecting to PostgreSQL:", error)
+        print ("\nError while connecting to PostgreSQL:", error)
     finally:
-        #closing database connection.
-            if(connection):
-                cursor.close()
-                connection.close()
-                print("PostgreSQL connection is closed")
+        # Closing database connection
+        if(connection):
+            cursor.close()
+            connection.close()
+            print("\nPostgreSQL connection is closed.")
+
+    return scan_complete
+
+def insert_header_file(header_data, cursor):
+    scan_complete = False
+    sql = "INSERT INTO image_data(img_name, observer, site, last_modified, header) VALUES (%s, %s, %s, %s, %s)"
+
+    fname = header_data['FILENAME']
+    site = re.split('-',fname)[0] # Extract site name from beginning of filename
+
+    attribute_values = []
+    attribute_values.extend([
+        header_data['FILENAME'],
+        header_data['OBSERVER'],
+        site,
+        header_data['DATE-OBS'],
+        header_data['JSON']
+    ])
+
+    try:
+        cursor.execute(sql,attribute_values)
+        print('---> ENTRY INSERTED: ' + fname)
+        scan_complete = True
+    except (Exception, psycopg2.Error) as error :
+        print("Error while inserting row to ptr archive:", error)
+
+    return scan_complete
