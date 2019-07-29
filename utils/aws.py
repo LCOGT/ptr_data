@@ -7,14 +7,13 @@ import time, re, json
 
 
 REGION = 'us-east-1'
-URL_EXPIRATION = 3600 # Seconds until URL expiration
 
 s3_c = boto3.client('s3', region_name=REGION)
 s3_r = boto3.resource('s3', region_name=REGION)
 
 
 def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
-    print('\nSEARCHING FOR IMAGE META-DATA STORED IN BUCKET: %s' % bucket)
+    print('Searching for data stored in %s bucket...' % bucket)
 
     data = []
     for key in get_matching_s3_objects(bucket, prefix=file_prefix, suffix=file_suffix): 
@@ -31,7 +30,7 @@ def scan_header_file(bucket, path):
 
     contents = read_s3_body(bucket, path)
     
-    print('SCANNING: ' + path)
+    print('Scanning: ' + path)
     for i in range(0, len(contents), fits_line_length):
         single_header_line = contents[i:i+fits_line_length].decode('utf8')
 

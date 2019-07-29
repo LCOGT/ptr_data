@@ -51,7 +51,7 @@ while running:
 
 # Connect to database and execute SQL queries
 if status == 'available':
-    scan = psql.insert_all_header_files(DB, DB_USER, DB_USER_PASS, host)
+    scan = psql.insert_all_header_files(DB, DB_USER, DB_USER_PASS, host, BUCKET_NAME)
 else:
     print("Unable to connect to the database.")
 
