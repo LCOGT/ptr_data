@@ -32,13 +32,17 @@ Use the python package-management system in order to install required modules wi
 ```
 
 ### Populate required config files
-In order to run and test the database script, first find the .config file in the repo and change/fill out its fields accordingly.
+In order to run and test the database script, first find the database.ini file in the repo and change/fill out its fields accordingly.
 ```
-DB_USER = username for database access
-DB_USER_PASS = password for database access
+[postgresql]
+host = location of remote database instance on rds
+database = name of ptr database
+user = username for database access
+password = password for database access
 
-DB_HOST = location of remote database instance to connect to
-DB_IDENTIFIER = name of database instance on rds
-DB = name of database to access
+[aws]
+db_identifier = name of database instance on rds
+bucket = name of bucket containing ptr images
+region = region of aws resources
 ```
 Values for username and password for database access can be found on the LCOGT information spreadsheet.
