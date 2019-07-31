@@ -6,21 +6,13 @@ import psycopg2
 import re
 
 
-def insert_all_header_files(db, db_user, db_user_pass, db_host, bucket):
+def insert_all_header_files(cursor, connection):
+    bucket = 'photonranch-001' # TODO: have s3 variables be read in in aws.py instead of passing through bucket and region names
     print('\nINSERTING DATA FROM S3...')
     full_scan_complete = False
     scanning_error = False
 
-    connection = None
     try:
-        connection = psycopg2.connect(database=db, user=db_user, password=db_user_pass, host=db_host, port="5432")
-        cursor = connection.cursor()
-
-        # Print PostgreSQL version
-        cursor.execute("SELECT version();")
-        record = cursor.fetchone()
-        print('You are connected to - ', record, '\n')
-        
         # Clear old entries in database before rescanning
         cursor.execute("DELETE FROM image_data") 
         print('Database cleared.')
@@ -42,12 +34,6 @@ def insert_all_header_files(db, db_user, db_user_pass, db_host, bucket):
 
     except (Exception, psycopg2.Error) as error :
         print ("\nError while connecting to PostgreSQL:", error)
-    finally:
-        # Closing database connection
-        if(connection):
-            cursor.close()
-            connection.close()
-            print("\nPostgreSQL connection is closed.")
 
     return full_scan_complete
 
@@ -80,29 +66,5 @@ def insert_header_file(header_data, cursor):
 
 
 def get_last_modified(site, k):
-    connection = None
-    try:
-        connection = psycopg2.connect(database=db, user=db_user, password=db_user_pass, host=db_host, port="5432")
-        cursor = connection.cursor()
+    return None
 
-        # Print PostgreSQL version
-        cursor.execute("SELECT version();")
-        record = cursor.fetchone()
-        print('You are connected to - ', record, '\n')
-        
-    except (Exception, psycopg2.Error) as error :
-        print ("\nError while connecting to PostgreSQL:", error)
-    finally:
-        # Closing database connection
-        if(connection):
-            cursor.close()
-            connection.close()
-            print("\nPostgreSQL connection is closed.")
-    except (Exception, psycopg2.Error) as error :
-        print ("\nError while connecting to PostgreSQL:", error)
-    finally:
-        # Closing database connection
-        if(connection):
-            cursor.close()
-            connection.close()
-            print("\nPostgreSQL connection is closed.")
