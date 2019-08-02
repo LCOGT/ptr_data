@@ -45,7 +45,7 @@ def insert_header_file(header_data, cursor):
 
     NOTE: This is the only function that needs modification
           when changing the database schema or attribute types! 
-          Make sure to the update_ptr_archive lambda function to match!
+          (Make sure to the update_ptr_archive lambda function to match)
     """
     scan_complete = False
 
