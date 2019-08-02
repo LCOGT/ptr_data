@@ -46,3 +46,10 @@ bucket = name of bucket containing ptr images
 region = region of aws resources
 ```
 Values for username and password for database access can be found on the LCOGT information spreadsheet.
+
+## Populating PTR Archive
+In order to scan s3 and update all entries in the database simply run:
+```bash
+$ python database.py
+```
+This will delete all current entries in the database and repopulate records based on the files found in the bucket specified within the .ini config file.
