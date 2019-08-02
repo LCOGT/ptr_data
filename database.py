@@ -14,6 +14,7 @@ BUCKET_NAME = 'photonranch-001'
 
 
 def connect_to_rds():
+    print('\n{:*^80}'.format('PTR Archive'))
     connection = None
     try:
         params = db_init.config()
@@ -31,25 +32,21 @@ def connect_to_rds():
         db_version = cursor.fetchone()
         print(db_version)
 
-        # LOGIC HERE
-        print('***********************')
-
-
         # check status of database
         db_identifier = aws_params['db_identifier']
         status = check_db_status(db_identifier)
+        print('{:*^80}'.format(''))
 
-        # execute sql queries
         if status == 'available':
+            # EXECUTE SQL QUERIES
+            #####################################################
 
             psql.insert_all_header_files(cursor, connection)
+
+            #####################################################
         else: 
             print('Unable to connect to database.')
-
-
-        print('***********************')
-
-
+        
         cursor.close()
     except (Exception, psycopg2.DatabaseError) as error:
         print(error)
@@ -88,5 +85,4 @@ def check_db_status(db_identifier):
 
 if __name__ == "__main__":
     connect_to_rds()
-
 

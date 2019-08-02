@@ -30,7 +30,7 @@ def scan_header_file(bucket, path):
 
     contents = read_s3_body(bucket, path)
     
-    print('Scanning: ' + path)
+    print('-> Scanning: ' + path)
     for i in range(0, len(contents), fits_line_length):
         single_header_line = contents[i:i+fits_line_length].decode('utf8')
 

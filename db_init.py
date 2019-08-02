@@ -19,8 +19,6 @@ def config(filename=DB_CONFIG_FILE):
     for section in sections:
         section_values = get_section(parser, section)
         params[section] = section_values
-        print(section)
-        print(section_values)
     return params
 
 def get_section(parser, section):

@@ -15,7 +15,6 @@ def lambda_handler(event, context):
     BUCKET_NAME = event['Records'][0]['s3']['bucket']['name']
     FILE_NAME = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
     
-    sql = "INSERT INTO image_data(img_id, observer, site, capture_date, header) VALUES (%s, %s, %s, %s, %s)"
     connection = None
     try:
         print('Establishing RDS connection...')
@@ -24,20 +23,35 @@ def lambda_handler(event, context):
         print('Connection established.')
 
         # INSERT DATA
-        attribute_values = []
+        header_data = parse_file(BUCKET_NAME, FILE_NAME)
         
-        data = parse_file(BUCKET_NAME, FILE_NAME)
+        sql = "INSERT INTO images(image_root, observer, site, capture_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
 
-        fname = data['FILENAME']
-        site = re.split('-',fname)[0] # Extract site name from beginning of filename
+        # extract values from header data
+        image_root = header_data['FILENAME']
+        observer = header_data['OBSERVER']
+        site = header_data['FILENAME']
+        capture_date = header_data['DATE-OBS']
+        header = header_data['JSON']
+        right_ascension = header_data['MNT-RA']
         
-        attribute_values.extend([
-            data['FILENAME'],
-            data['OBSERVER'],
+        # extra attribute formatting
+        image_root = re.sub('.fits', '', image_root) # remove file extension
+        image_root = image_root[:-4] # remove image tag
+        
+        site = re.split('-',site)[0] # extract site name from beginning of filename
+        
+        capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+        
+        # format row for SQL insertion
+        attribute_values = [
+            image_root,
+            observer,
             site,
-            data['DATE-OBS'],
-            data['JSON']
-        ])
+            capture_date,
+            right_ascension,
+            header
+        ]
         
         print('Placing entry into ptr archive...')
         cursor.execute(sql,attribute_values)

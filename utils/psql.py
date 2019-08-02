@@ -8,29 +8,30 @@ import re
 
 def insert_all_header_files(cursor, connection):
     bucket = 'photonranch-001' # TODO: have s3 variables be read in in aws.py instead of passing through bucket and region names
-    print('\nINSERTING DATA FROM S3...')
     full_scan_complete = False
     scanning_error = False
 
     try:
-        # Clear old entries in database before rescanning
-        cursor.execute("DELETE FROM image_data") 
-        print('Database cleared.')
+        # clear old entries in database before rescanning
+        cursor.execute("DELETE FROM images") 
+        print('\n{:^80}\n'.format('**DATABASE CLEARED**'))
 
-        # Insert all header file data
+        # scan and insert header file data
         data = aws.scan_s3_image_data(bucket, file_suffix='E00.txt')
+
+        print('\nInserting data...')
         for header in data:
             scan = insert_header_file(header, cursor)
             if scan == False:
                 scanning_error = True
         connection.commit()
         
-        # Report on scanning results
+        # report on scanning results
         if scanning_error == False:
-            print("Scanning completed successfully!")
+            print("\nScanning completed successfully!")
             full_scan_complete = True
         else:
-            print("Scanning completed with errors.")
+            print("\nScanning completed with errors.")
 
     except (Exception, psycopg2.Error) as error :
         print ("\nError while connecting to PostgreSQL:", error)
@@ -39,25 +40,46 @@ def insert_all_header_files(cursor, connection):
 
 
 def insert_header_file(header_data, cursor):
-    scan_complete = False
-    sql = "INSERT INTO image_data(img_id, observer, site, capture_date, header) VALUES (%s, %s, %s, %s, %s)"
+    """
+    Insert a single record into the ptr image database
 
-    fname = header_data['FILENAME']
-    site = re.split('-',fname)[0] # Extract site name from beginning of filename
-    
-    # Format row for SQL insertion
-    attribute_values = []
-    attribute_values.extend([
-        header_data['FILENAME'],
-        header_data['OBSERVER'],
+    NOTE: This is the only function that needs modification
+          when changing the database schema or attribute types! 
+          Make sure to the update_ptr_archive lambda function to match!
+    """
+    scan_complete = False
+
+    sql = "INSERT INTO images(image_root, observer, site, capture_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
+
+    # extract values from header data
+    image_root = header_data['FILENAME']
+    observer = header_data['OBSERVER']
+    site = header_data['FILENAME']
+    capture_date = header_data['DATE-OBS']
+    header = header_data['JSON']
+    right_ascension = header_data['MNT-RA']
+
+    # extra attribute formatting
+    image_root = re.sub('.fits', '', image_root) # remove file extension
+    image_root = image_root[:-4] # remove image tag
+
+    site = re.split('-',site)[0] # extract site name from beginning of filename
+
+    capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+
+    # format row for SQL insertion
+    attribute_values = [
+        image_root,
+        observer,
         site,
-        header_data['DATE-OBS'],
-        header_data['JSON']
-    ])
+        capture_date,
+        right_ascension,
+        header
+    ]
 
     try:
         cursor.execute(sql,attribute_values)
-        print('---> ENTRY INSERTED: ' + fname)
+        print('-> ENTRY INSERTED: ' + image_root)
         scan_complete = True
     except (Exception, psycopg2.Error) as error :
         print("Error while inserting row to ptr archive:", error)
@@ -65,6 +87,13 @@ def insert_header_file(header_data, cursor):
     return scan_complete
 
 
-def get_last_modified(site, k):
-    return None
+def get_last_modified(cursor, connection, k):
+    sql = "SELECT image_root FROM images ORDER BY capture_date DESC LIMIT %d" % k
+    try:
+        cursor.execute(sql)
+        images = cursor.fetchmany(k)
+    except (Exception, psycopg2.Error) as error :
+        print("Error while retrieving records:", error)
+    return images
+
 
