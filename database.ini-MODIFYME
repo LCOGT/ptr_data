@@ -1,0 +1,10 @@
+[postgresql]
+host=
+database=
+user=
+password=
+
+[aws]
+db_identifier=
+bucket=
+region=
