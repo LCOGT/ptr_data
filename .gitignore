@@ -1,6 +1,9 @@
+# .gitignore
+
 venv/*
 .vscode/*
 __pycache__/*
 */__pycache__/*
 
-*.ini
+# db credentials
+database.ini

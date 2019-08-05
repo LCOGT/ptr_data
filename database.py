@@ -8,19 +8,19 @@ import psycopg2
 import time
 
 
+params = db_init.config()
+db_params = params['postgresql']
+aws_params = params['aws']
 
-REGION = 'us-east-1'
-BUCKET_NAME = 'photonranch-001'
+BUCKET = aws_params['bucket']
+REGION = aws_params['region']
+DB_IDENTIFIER = aws_params['db_identifier']
 
 
 def connect_to_rds():
     print('\n{:*^80}'.format('PTR Archive'))
     connection = None
     try:
-        params = db_init.config()
-        db_params = params['postgresql']
-        aws_params = params['aws']
-
         print('Connecting to database...')
         connection = psycopg2.connect(**db_params)
 
@@ -33,17 +33,17 @@ def connect_to_rds():
         print(db_version)
 
         # check status of database
-        db_identifier = aws_params['db_identifier']
-        status = check_db_status(db_identifier)
+        status = check_db_status(DB_IDENTIFIER)
         print('{:*^80}'.format(''))
 
         if status == 'available':
             # EXECUTE SQL QUERIES
             #####################################################
 
-            #psql.insert_all_header_files(cursor, connection)
+            psql.insert_all_header_files(cursor, connection)
             query = {
-                "site": "TST",
+                "site": "test",
+                "observer": "WER"
             }
             print(psql.query_database(cursor, query))
 
