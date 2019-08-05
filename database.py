@@ -41,7 +41,11 @@ def connect_to_rds():
             # EXECUTE SQL QUERIES
             #####################################################
 
-            psql.insert_all_header_files(cursor, connection)
+            #psql.insert_all_header_files(cursor, connection)
+            query = {
+                "site": "TST",
+            }
+            print(psql.query_database(cursor, query))
 
             #####################################################
         else: 

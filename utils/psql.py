@@ -94,6 +94,25 @@ def get_last_modified(cursor, connection, k):
         images = cursor.fetchmany(k)
     except (Exception, psycopg2.Error) as error :
         print("Error while retrieving records:", error)
+
     return images
 
+def query_database(cursor, query):
+    sql = "SELECT image_root FROM images"
 
+    if len(query) > 0:
+        sql = sql + " WHERE"
+        for k, v in query.items():
+            add = " %s = '%s' AND" % (k ,v)
+            sql = sql + add
+
+        sql = sql[:-3]
+
+    print(sql)
+    try:
+        cursor.execute(sql)
+        images = cursor.fetchall()
+    except (Exception, psycopg2.Error) as error :
+        print("Error while retrieving records:", error)
+
+    return images
