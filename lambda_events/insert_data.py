@@ -11,48 +11,79 @@ logger.setLevel(logging.INFO)
 def lambda_handler(event, context):
     # context.callbackWaitsForEmptyEventLoop = False
     print('***RECIEVED S3 EVENT***')
-    # Get the object from the event and show its content type
-    BUCKET_NAME = event['Records'][0]['s3']['bucket']['name']
-    FILE_NAME = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
     
-    connection = None
-    try:
-        print('Establishing RDS connection...')
-        connection = psycopg2.connect(database='ptrdatabase', user='ptrUser', password='ptrPassword', host='testdatabase.cb1rx8ymtxjb.us-east-1.rds.amazonaws.com', port = '5432')
-        cursor = connection.cursor()
-        print('Connection established.')
-
-        # INSERT DATA
-        header_data = parse_file(BUCKET_NAME, FILE_NAME)
+    # Get the object from the event and show its content type
+    bucket_name = event['Records'][0]['s3']['bucket']['name']
+    file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-E00.fits.bz2
+    
+    file_key = file_path.split('/')[-1]
+    
+    base_filename = file_key[:26] # Used as primary key
+    data_type = file_key[27:30] # e.g. 'E00'
+    file_extension = file_key.split('.')[1] # e.g. 'fits'
+    site = base_filename[0:3] # 3 letter site abbreviation, like 'WMD'
+    print(f"base filename: {base_filename}")
+    print(f"data_type: {data_type}")
+    print(f"file_extension: {file_extension}")
+    print(f"site: {site}")
+    
+    
+    # Handle text file (which stores the fits header data)
+    if file_extension == "txt":
+        
+        header_data = parse_file(bucket_name, file_path)
         
         sql = "INSERT INTO images(image_root, observer, site, capture_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
 
         # extract values from header data
-        image_root = header_data['FILENAME']
+        #image_root = header_data['FILENAME']
         observer = header_data['OBSERVER']
         site = header_data['FILENAME']
         capture_date = header_data['DATE-OBS']
         header = header_data['JSON']
         right_ascension = header_data['MNT-RA']
         
-        # extra attribute formatting
-        image_root = re.sub('.fits', '', image_root) # remove file extension
-        image_root = image_root[:-4] # remove image tag
-        
-        site = re.split('-',site)[0] # extract site name from beginning of filename
-        
         capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
         
         # format row for SQL insertion
         attribute_values = [
-            image_root,
+            #image_root,
+            base_filename, # previously named image_root
             observer,
             site,
             capture_date,
             right_ascension,
             header
         ]
+
+    # Handle non-text files (eg. fits or jpg)
+    else:
         
+        # Define the attribue column we will set to true.
+        file_exists_attribute = f"{data_type.lower()}_{file_extension}_exists"
+
+        # Create a new element with the primary key, site, and file_exists_attribue=true. 
+        # If there is already an element with this primary key, update the state of file_exists_attribute = true
+        # TODO: rewrite to avoid injection attack vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
+        sql = (f"INSERT INTO images (image_root, site, {file_exists_attribute}) "
+                "VALUES(%s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+                f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
+                )
+        
+        # These values will be fed into the sql command string (above)
+        attribute_values = (base_filename, site, True)
+    
+   
+    connection = None
+    try:
+        
+        # Connect to database
+        print('Establishing RDS connection...')
+        connection = psycopg2.connect(database='ptrdatabase', user='ptrUser', password='ptrPassword', host='testdatabase.cb1rx8ymtxjb.us-east-1.rds.amazonaws.com', port = '5432')
+        cursor = connection.cursor()
+        print('Connection established.')
+
         print('Placing entry into ptr archive...')
         cursor.execute(sql,attribute_values)
         print('ENTRY INSERTED.')
@@ -70,7 +101,13 @@ def lambda_handler(event, context):
     
     return True
 
+
+
+
 def read_s3_body(bucket_name, object_name):
+    """
+    TODO: docstring
+    """
     s3_c = boto3.client('s3',region_name='us-east-1')
     s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
     print('S3 connection established.')
@@ -78,7 +115,13 @@ def read_s3_body(bucket_name, object_name):
 
     return body.read()
     
+    
+    
 def parse_file(bucket,fname):
+    """
+    Parse a file from s3. Used to extract fits header values stored in a txt file.
+    """
+    
     print('Reading in file %s' % fname)
     data_entry = {}
     fits_line_length = 80
