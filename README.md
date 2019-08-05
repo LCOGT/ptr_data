@@ -32,7 +32,7 @@ Use the python package-management system in order to install required modules wi
 ```
 
 ### Populate required config files
-In order to run and test the database script, first find the database.ini file in the repo and change/fill out its fields accordingly.
+In order to run and test the database script, first find the database.ini-MODIFYME file in the repo and rename it 'database.ini. Change/fill out its fields accordingly:
 ```
 [postgresql]
 host = location of remote database instance on rds
