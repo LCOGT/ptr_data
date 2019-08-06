@@ -49,7 +49,7 @@ def insert_header_file(header_data, cursor):
     """
     scan_complete = False
 
-    sql = "INSERT INTO images(image_root, observer, site, capture_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
+    sql = "INSERT INTO images(image_root, observer, site, capture_date, sort_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s, %s)"
 
     # extract values from header data
     image_root = header_data['FILENAME']
@@ -73,6 +73,7 @@ def insert_header_file(header_data, cursor):
         observer,
         site,
         capture_date,
+        capture_date, # this one applies to the sort_date attrbute
         right_ascension,
         header
     ]
