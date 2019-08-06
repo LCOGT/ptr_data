@@ -1,3 +1,6 @@
+# INSTRUCTIONS: save a new version of this file and name it 'database.ini'. Then fill in the values. 
+# This keeps sensitive information out of version control.
+
 [postgresql]
 host=
 database=
