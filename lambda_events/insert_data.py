@@ -9,24 +9,41 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
-    # context.callbackWaitsForEmptyEventLoop = False
-    print('***RECIEVED S3 EVENT***')
     
     # Get the object from the event and show its content type
     bucket_name = event['Records'][0]['s3']['bucket']['name']
-    file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
-    # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-E00.fits.bz2
     
+    # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-E00.fits.bz2
+    file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    
+    # Format amazon upload timestamp (yyyy-mm-ddThh:mm:ss.mmmZ) 
+    # to psql timestamp without timezone (yyyy-mm-dd hh:mm:ss).
+    upload_time = list(urllib.parse.unquote_plus(event['Records'][0]['eventTime']))
+    upload_time[10] = ' '
+    upload_time = upload_time[:-5]
+    upload_time = "".join(upload_time)
+    
+    # The 'filename' that looks somethign like 'WMD-ea03-20190621-00000007-E00.fits.bz2'
     file_key = file_path.split('/')[-1]
     
-    base_filename = file_key[:26] # Used as primary key
-    data_type = file_key[27:30] # e.g. 'E00'
-    file_extension = file_key.split('.')[1] # e.g. 'fits'
-    site = base_filename[0:3] # 3 letter site abbreviation, like 'WMD'
+    # The base_filename (aka primary key) is something like 'WMD-ea03-20190621-00000007'
+    base_filename = file_key[:26]
+    
+    # The data_type is the 'E00' string after the base_filename.
+    data_type = file_key[27:30]
+    
+    # The file_extension signifies the filetype, such as 'fits' or 'txt'.
+    file_extension = file_key.split('.')[1]
+    
+    # The site is derived from the beginning of the base filename (eg. 'WMD')
+    site = base_filename[0:3] 
+    
+    print(f"upload time: {upload_time}")
     print(f"base filename: {base_filename}")
     print(f"data_type: {data_type}")
     print(f"file_extension: {file_extension}")
     print(f"site: {site}")
+    
     
     
     # Handle text file (which stores the fits header data)
@@ -34,7 +51,7 @@ def lambda_handler(event, context):
         
         header_data = parse_file(bucket_name, file_path)
         
-        sql = "INSERT INTO images(image_root, observer, site, capture_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
+        sql = "INSERT INTO images(image_root, observer, site, capture_date, sort_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
 
         # extract values from header data
         #image_root = header_data['FILENAME']
@@ -48,10 +65,10 @@ def lambda_handler(event, context):
         
         # format row for SQL insertion
         attribute_values = [
-            #image_root,
             base_filename, # previously named image_root
             observer,
             site,
+            capture_date,
             capture_date,
             right_ascension,
             header
@@ -65,14 +82,20 @@ def lambda_handler(event, context):
 
         # Create a new element with the primary key, site, and file_exists_attribue=true. 
         # If there is already an element with this primary key, update the state of file_exists_attribute = true
-        # TODO: rewrite to avoid injection attack vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
-        sql = (f"INSERT INTO images (image_root, site, {file_exists_attribute}) "
-                "VALUES(%s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+        # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
+       
+        sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
+                "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
                 f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
-                )
+        )
         
         # These values will be fed into the sql command string (above)
-        attribute_values = (base_filename, site, True)
+        attribute_values = (
+            base_filename, 
+            site, 
+            upload_time, 
+            True
+        )
     
    
     connection = None
@@ -94,10 +117,10 @@ def lambda_handler(event, context):
         print(error)
     finally:
         #closing database connection.
-            if(connection):
-                cursor.close()
-                connection.close()
-                print('PostgreSQL connection is closed.')
+        if(connection):
+            cursor.close()
+            connection.close()
+            print('PostgreSQL connection is closed.')
     
     return True
 
