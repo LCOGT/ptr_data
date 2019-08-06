@@ -30,19 +30,33 @@ def scan_header_file(bucket, path):
 
     contents = read_s3_body(bucket, path)
     
-    print('-> Scanning: ' + path)
+    #print('-> Scanning: ' + path)
     for i in range(0, len(contents), fits_line_length):
         single_header_line = contents[i:i+fits_line_length].decode('utf8')
+
 
         # Split header lines according to the FITS header format
         values = re.split('=|/|',single_header_line)
         
+        # Get the attribute and value for each line in the header.
         try:
-            # Remove extra characters.  
-            attribute = values[0].strip()
-            attribute_value = values[1].replace("'", "").strip() 
+
+            # The first 8 characters contains the attribute.
+            attribute = single_header_line[:8].strip()
+            # The rest of the characters contain the value (and sometimes a comment).
+            after_attr = single_header_line[10:-1]
+
+            # If the value (and not in a comment) is a string, then 
+            # we want the contents inside the single-quotes.
+            if "'" in after_attr.split('/')[0]:
+                value = after_attr.split("'")[1].strip()
             
-            data_entry[attribute] = attribute_value
+            # Otherwise, get the string preceding a comment (comments start with '/')
+            else: 
+                value = after_attr.split("/")[0].strip()
+
+            data_entry[attribute] = value
+
         except:
             if attribute == 'END':
                 break

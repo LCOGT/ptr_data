@@ -40,12 +40,13 @@ def connect_to_rds():
             # EXECUTE SQL QUERIES
             #####################################################
 
+            psql.delete_all_entries(cursor)
             psql.insert_all_header_files(cursor, connection)
             query = {
                 "site": "test",
                 "observer": "WER"
             }
-            print(psql.query_database(cursor, query))
+            #print(psql.query_database(cursor, query))
 
             #####################################################
         else: 

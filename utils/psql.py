@@ -13,14 +13,15 @@ def insert_all_header_files(cursor, connection):
 
     try:
         # clear old entries in database before rescanning
-        cursor.execute("DELETE FROM images") 
-        print('\n{:^80}\n'.format('**DATABASE CLEARED**'))
+        #cursor.execute("DELETE FROM images") 
+        #print('\n{:^80}\n'.format('**DATABASE CLEARED**'))
 
         # scan and insert header file data
         data = aws.scan_s3_image_data(bucket, file_suffix='E00.txt')
 
         print('\nInserting data...')
         for header in data:
+            
             scan = insert_header_file(header, cursor)
             if scan == False:
                 scanning_error = True
@@ -37,6 +38,16 @@ def insert_all_header_files(cursor, connection):
         print ("\nError while connecting to PostgreSQL:", error)
 
     return full_scan_complete
+
+def delete_all_entries(cursor):
+    '''
+    Clear the database of all entries. 
+    '''
+
+    cursor.execute("DELETE FROM images") 
+    print('\n{:^80}\n'.format('**DATABASE IS EMPTY**'))
+
+
 
 
 def insert_header_file(header_data, cursor):
@@ -68,15 +79,15 @@ def insert_header_file(header_data, cursor):
     capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
 
     # format row for SQL insertion
-    attribute_values = [
+    attribute_values = (
         image_root,
         observer,
         site,
         capture_date,
         capture_date, # this one applies to the sort_date attrbute
         right_ascension,
-        header
-    ]
+        header,
+    )
 
     try:
         cursor.execute(sql,attribute_values)
