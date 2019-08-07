@@ -1,7 +1,7 @@
 # database.py
 
 import db_init
-from utils import psql
+from utils import psql, aws
 
 import boto3
 import psycopg2
@@ -40,8 +40,9 @@ def connect_to_rds():
             # EXECUTE SQL QUERIES
             #####################################################
 
-            psql.delete_all_entries(cursor)
-            psql.insert_all_header_files(cursor, connection)
+            psql.delete_all_entries(cursor, connection)
+            psql.insert_all_entries(cursor, connection)
+            #psql.insert_all_header_files(cursor, connection)
             query = {
                 "site": "test",
                 "observer": "WER"
