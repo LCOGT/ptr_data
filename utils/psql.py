@@ -30,7 +30,7 @@ def delete_all_entries(cursor, connection):
 
 def insert_all_entries(cursor, connection, bucket):
 
-    items = aws.scan_s3_all_ptr_data(bucket, 900)
+    items = aws.scan_s3_all_ptr_data(bucket, 0)
 
     for item in tqdm(items): 
 
