@@ -37,17 +37,12 @@ def connect_to_rds():
         print('{:*^80}'.format(''))
 
         if status == 'available':
+
             # EXECUTE SQL QUERIES
             #####################################################
 
-            psql.delete_all_entries(cursor, connection)
-            psql.insert_all_entries(cursor, connection)
-            #psql.insert_all_header_files(cursor, connection)
-            query = {
-                "site": "test",
-                "observer": "WER"
-            }
-            #print(psql.query_database(cursor, query))
+            #psql.delete_all_entries(cursor, connection)
+            psql.insert_all_entries(cursor, connection, BUCKET)
 
             #####################################################
         else: 

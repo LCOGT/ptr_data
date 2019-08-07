@@ -28,9 +28,9 @@ def delete_all_entries(cursor, connection):
     print('\n{:^80}\n'.format('**DATABASE IS EMPTY**'))
 
 
-def insert_all_entries(cursor, connection, bucket='photonranch-001'):
+def insert_all_entries(cursor, connection, bucket):
 
-    items = aws.scan_s3_all_ptr_data(bucket, 0)
+    items = aws.scan_s3_all_ptr_data(bucket, 900)
 
     for item in tqdm(items): 
 

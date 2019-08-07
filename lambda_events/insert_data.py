@@ -8,20 +8,22 @@ import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+s3_c = boto3.client('s3', region_name='us-east-1')
+
 def lambda_handler(event, context):
     
     # Get the object from the event and show its content type
-    bucket_name = event['Records'][0]['s3']['bucket']['name']
+    bucket = event['Records'][0]['s3']['bucket']['name']
     
     # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-E00.fits.bz2
     file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
     
     # Format amazon upload timestamp (yyyy-mm-ddThh:mm:ss.mmmZ) 
     # to psql timestamp without timezone (yyyy-mm-dd hh:mm:ss).
-    upload_time = list(urllib.parse.unquote_plus(event['Records'][0]['eventTime']))
-    upload_time[10] = ' '
-    upload_time = upload_time[:-5]
-    upload_time = "".join(upload_time)
+    last_modified = list(urllib.parse.unquote_plus(event['Records'][0]['eventTime']))
+    last_modified[10] = ' '
+    last_modified = last_modified[:-5]
+    last_modified = "".join(last_modified)
     
     # The 'filename' that looks somethign like 'WMD-ea03-20190621-00000007-E00.fits.bz2'
     file_key = file_path.split('/')[-1]
@@ -38,44 +40,84 @@ def lambda_handler(event, context):
     # The site is derived from the beginning of the base filename (eg. 'WMD')
     site = base_filename[0:3] 
     
-    print(f"upload time: {upload_time}")
+    print(f"file_path: {file_path}")
     print(f"base filename: {base_filename}")
     print(f"data_type: {data_type}")
     print(f"file_extension: {file_extension}")
     print(f"site: {site}")
-    
-    
-    
-    # Handle text file (which stores the fits header data)
+
+  
     if file_extension == "txt":
+            
+        header_data = scan_header_file(bucket, file_path)
         
-        header_data = parse_file(bucket_name, file_path)
-        
-        sql = "INSERT INTO images(image_root, observer, site, capture_date, sort_date, right_ascension, header) VALUES (%s, %s, %s, %s, %s, %s)"
+        sql = ("INSERT INTO images("
+
+               "image_root, "
+               "observer, "
+               "site, "
+               "capture_date, "
+               "sort_date, "
+               "right_ascension, "
+               "declination, "
+               "altitude, "
+               "azimuth, "
+               "filter_used, "
+               "airmass, "
+               "exposure_time, "
+               "header) "
+
+               "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+               "ON CONFLICT (image_root) DO UPDATE SET "
+
+               "observer = excluded.observer, "
+               "capture_date = excluded.capture_date, "
+               "sort_date = excluded.sort_date, "
+               "right_ascension = excluded.right_ascension, "
+               "declination = excluded.declination, "
+               "altitude = excluded.altitude, "
+               "azimuth = excluded.azimuth, "
+               "filter_used = excluded.filter_used, "
+               "airmass = excluded.airmass, "
+               "exposure_time = excluded.exposure_time, "
+               "header = excluded.header;"
+        )
 
         # extract values from header data
-        #image_root = header_data['FILENAME']
-        observer = header_data['OBSERVER']
-        site = header_data['FILENAME']
-        capture_date = header_data['DATE-OBS']
-        header = header_data['JSON']
-        right_ascension = header_data['MNT-RA']
+        observer = header_data.get('OBSERVER')
+        capture_date = header_data.get('DATE-OBS')
+        header = header_data.get('JSON')
+        right_ascension = header_data.get('MNT-RA')
+        declination = header_data.get('MNT-DEC')
+        altitude = header_data.get('ALTITUDE')
+        azimuth = header_data.get('AZIMUTH')
+        filter_used = header_data.get('FILTER')
+        airmass = header_data.get('AIRMASS')
+        exposure_time = header_data.get('EXPTIME')
         
         capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
         
-        # format row for SQL insertion
+        # These values will be fed into the sql command string (above)
         attribute_values = [
-            base_filename, # previously named image_root
+            base_filename,
             observer,
             site,
             capture_date,
-            capture_date,
+            capture_date, # capture_date is also used for the 'sort_date' attribute.
             right_ascension,
+            declination,
+            altitude,
+            azimuth,
+            filter_used,
+            airmass,
+            exposure_time,
             header
         ]
 
+        valid_sql_to_execute = True
+        
     # Handle non-text files (eg. fits or jpg)
-    else:
+    elif file_extension in ['fits', 'jpg']:
         
         # Define the attribue column we will set to true.
         file_exists_attribute = f"{data_type.lower()}_{file_extension}_exists"
@@ -83,7 +125,7 @@ def lambda_handler(event, context):
         # Create a new element with the primary key, site, and file_exists_attribue=true. 
         # If there is already an element with this primary key, update the state of file_exists_attribute = true
         # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
-       
+    
         sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
                 "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
                 f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
@@ -93,9 +135,15 @@ def lambda_handler(event, context):
         attribute_values = (
             base_filename, 
             site, 
-            upload_time, 
+            last_modified, 
             True
         )
+
+        valid_sql_to_execute = True
+
+    else:
+        print(f"Unrecognized file type: {file_extension}. Skipping file.")
+        items_not_added += 1
     
    
     connection = None
@@ -107,65 +155,76 @@ def lambda_handler(event, context):
         cursor = connection.cursor()
         print('Connection established.')
 
-        print('Placing entry into ptr archive...')
-        cursor.execute(sql,attribute_values)
-        print('ENTRY INSERTED.')
+        if valid_sql_to_execute:
+            cursor.execute(sql,attribute_values)
 
         connection.commit()
-        print('Done.')
+        print('Successfully updated database.')
     except (Exception, psycopg2.Error) as error :
+        print('Failed to update database.')
         print(error)
     finally:
         #closing database connection.
         if(connection):
             cursor.close()
             connection.close()
-            print('PostgreSQL connection is closed.')
-    
+
     return True
 
 
+def scan_header_file(bucket, path):
+    """
+    Create a python dict from a fits-header-formatted text file in s3.
 
-
-def read_s3_body(bucket_name, object_name):
+    :param bucket: String name of s3 bucket.
+    :param path: String path to a text file in the bucket. 
+        note - this file is assumed to be formatted as a fits header.
+    :return: dictionary representation the fits header txt file.
     """
-    TODO: docstring
-    """
-    s3_c = boto3.client('s3',region_name='us-east-1')
-    s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
-    print('S3 connection established.')
-    body = s3_object['Body']
-
-    return body.read()
-    
-    
-    
-def parse_file(bucket,fname):
-    """
-    Parse a file from s3. Used to extract fits header values stored in a txt file.
-    """
-    
-    print('Reading in file %s' % fname)
     data_entry = {}
     fits_line_length = 80
-    
-    contents = read_s3_body(bucket, fname)
+
+    contents = read_s3_body(bucket, path)
     
     for i in range(0, len(contents), fits_line_length):
         single_header_line = contents[i:i+fits_line_length].decode('utf8')
-        values = re.split('=|/|',single_header_line) # Split line twice according to '=' and '/' characters
-        try:
-            # Remove extra characters. Attribute values are first
-            # stripped of single quotation marks before whitespace is removed.   
-            attribute = values[0].strip()
-            attribute_value = values[1].replace("'", "").strip() 
-                
-            data_entry[attribute] = attribute_value
-        except:
-            if attribute == 'END':
-                break
 
-    # Add the JSON representation of the data_entry to itself      
-    print('Compiling data...')
+
+        # Split header lines according to the FITS header format
+        values = re.split('=|/|',single_header_line)
+        
+        # Get the attribute and value for each line in the header.
+        try:
+
+            # The first 8 characters contains the attribute.
+            attribute = single_header_line[:8].strip()
+            # The rest of the characters contain the value (and sometimes a comment).
+            after_attr = single_header_line[10:-1]
+
+            # If the value (and not in a comment) is a string, then 
+            # we want the contents inside the single-quotes.
+            if "'" in after_attr.split('/')[0]:
+                value = after_attr.split("'")[1].strip()
+            
+            # Otherwise, get the string preceding a comment (comments start with '/')
+            else: 
+                value = after_attr.split("/")[0].strip()
+
+            # Add the attribute/value to a dict
+            data_entry[attribute] = value
+
+            if attribute == 'END': break
+        
+        except Exception as e:
+            print(f"Error with parsing fits header: {e}")
+
+    # Add the JSON representation of the data_entry to itself as the header attribute
     data_entry['JSON'] = json.dumps(data_entry)
+
     return data_entry
+
+def read_s3_body(bucket_name, object_name):
+    s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
+    body = s3_object['Body']
+    return body.read()
+
