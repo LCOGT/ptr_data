@@ -32,3 +32,4 @@ package:
   exclude:
     - venv/**
     - .env
+    - lambda_tests.txt

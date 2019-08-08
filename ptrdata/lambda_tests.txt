@@ -1,3 +1,6 @@
+These are test events that can be run from the aws lambda console. 
+First, save a new test configuration with one of these settings pasted in, then run it.
+
 putFitsE00:
 
 {
