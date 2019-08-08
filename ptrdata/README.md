@@ -1,6 +1,6 @@
 # ptrdata runs on aws lambda
 
-This direcotry contains the code and scripts needed to deploy the code on aws lambda. We use the serverless framework for deployment. 
+This directory contains the code and scripts needed to deploy the code on aws lambda. We use the serverless framework for deployment. 
 
 ## Initialization:
 
