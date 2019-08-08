@@ -3,6 +3,7 @@ import urllib.parse
 import boto3
 import psycopg2
 import re
+import os
 
 import logging
 logger = logging.getLogger()
@@ -149,9 +150,15 @@ def lambda_handler(event, context):
     connection = None
     try:
         
+        database = os.environ['database']
+        user = os.environ['user']
+        password = os.environ['password']
+        host = os.environ['host']
+        port = os.environ['port']
+        
         # Connect to database
         print('Establishing RDS connection...')
-        connection = psycopg2.connect(database='ptrdatabase', user='ptrUser', password='ptrPassword', host='testdatabase.cb1rx8ymtxjb.us-east-1.rds.amazonaws.com', port = '5432')
+        connection = psycopg2.connect(database=database, user=user, password=password, host=host, port=port)
         cursor = connection.cursor()
         print('Connection established.')
 
