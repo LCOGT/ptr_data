@@ -64,6 +64,7 @@ def insert_all_entries(cursor, connection, bucket):
 
         # Handle text file (which stores the fits header data)
         if file_extension == "txt":
+            pass
             
             header_data = aws.scan_header_file(bucket, file_path)
             
@@ -101,7 +102,7 @@ def insert_all_entries(cursor, connection, bucket):
 
             # extract values from header data
             observer = header_data.get('OBSERVER')
-            capture_date = header_data.get('DATE-OBS')
+            capture_date = header_data.get('DATE-OBS', last_modified)
             header = header_data.get('JSON')
             right_ascension = header_data.get('MNT-RA')
             declination = header_data.get('MNT-DEC')
@@ -111,7 +112,10 @@ def insert_all_entries(cursor, connection, bucket):
             airmass = header_data.get('AIRMASS')
             exposure_time = header_data.get('EXPTIME')
             
-            capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+            print("capture date: ")
+            print(capture_date)
+            print(type(capture_date))
+            #capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
             
             # These values will be fed into the sql command string (above)
             attribute_values = [
@@ -162,7 +166,7 @@ def insert_all_entries(cursor, connection, bucket):
             print(f"[psql.py > insert_all_entries] Unrecognized file type: {file_extension}. Skipping file.")
             items_not_added += 1
 
-    
+        print('hello')
         # Execute the sql if it has been properly created.
         if valid_sql_to_execute: cursor.execute(sql,attribute_values)
 

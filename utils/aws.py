@@ -25,7 +25,7 @@ def scan_s3_image_data(bucket, file_prefix='', file_suffix=''):
     return data
 
 
-def scan_s3_all_ptr_data(bucket, skip_initial_items=0, prefix='WMD'):
+def scan_s3_all_ptr_data(bucket, skip_initial_items=0, prefix='wmd'):
     """
     Get all objects in a given bucket (with optional prefix).
 

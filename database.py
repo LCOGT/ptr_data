@@ -20,41 +20,40 @@ DB_IDENTIFIER = aws_params['db_identifier']
 def connect_to_rds():
     print('\n{:*^80}'.format('PTR Archive'))
     connection = None
-    try:
-        print('Connecting to database...')
-        connection = psycopg2.connect(**db_params)
 
-        cursor = connection.cursor()
 
-        print('Database Version:')
-        cursor.execute('SELECT version()')
+    print('Connecting to database...')
+    connection = psycopg2.connect(**db_params)
 
-        db_version = cursor.fetchone()
-        print(db_version)
+    cursor = connection.cursor()
 
-        # check status of database
-        status = check_db_status(DB_IDENTIFIER)
-        print('{:*^80}'.format(''))
+    print('Database Version:')
+    cursor.execute('SELECT version()')
 
-        if status == 'available':
+    db_version = cursor.fetchone()
+    print(db_version)
 
-            # EXECUTE SQL QUERIES
-            #####################################################
+    # check status of database
+    status = check_db_status(DB_IDENTIFIER)
+    print('{:*^80}'.format(''))
 
-            #psql.delete_all_entries(cursor, connection)
-            psql.insert_all_entries(cursor, connection, BUCKET)
+    if status == 'available':
 
-            #####################################################
-        else: 
-            print('Unable to connect to database.')
-        
-        cursor.close()
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-    finally:
-        if connection is not None:
-            connection.close()
-            print('Connection closed')
+        # EXECUTE SQL QUERIES
+        #####################################################
+
+        #psql.delete_all_entries(cursor, connection)
+        psql.insert_all_entries(cursor, connection, BUCKET)
+
+        #####################################################
+    else: 
+        print('Unable to connect to database.')
+    
+    cursor.close()
+
+    if connection is not None:
+        connection.close()
+        print('Connection closed')
 
 def check_db_status(db_identifier):
     status = None

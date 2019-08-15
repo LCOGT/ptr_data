@@ -96,7 +96,10 @@ def main(event, context):
         airmass = header_data.get('AIRMASS')
         exposure_time = header_data.get('EXPTIME')
         
-        capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+        try: 
+            capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+        except: 
+            capture_date = last_modified
         
         # These values will be fed into the sql command string (above)
         attribute_values = [
