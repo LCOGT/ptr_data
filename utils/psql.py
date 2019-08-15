@@ -109,11 +109,7 @@ def insert_all_entries(cursor, connection, bucket):
             airmass = header_data.get('AIRMASS')
             exposure_time = header_data.get('EXPTIME')
             
-            # TODO: Make sure that empty capture date is handled correctly
-            try:
-                capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
-            except:
-                capture_date = None
+            capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
 
             # These values will be fed into the sql command string (above)
             attribute_values = [
@@ -206,70 +202,4 @@ def query_database(cursor, query):
 
     return images
 
-#####################################################################################
-# Logic for populating test databases with dummy values
 
-import random
-import string
-import random
-
-def randomString(stringLength=10):
-    """Generate a random string of fixed length """
-    letters = string.ascii_lowercase
-    return ''.join(random.choice(letters) for i in range(stringLength))
-
-def insert_dummy_entry(cursor):
-    sql = ("INSERT INTO images_1("
-
-                   "base_filename, "
-                   "site, "
-                   "capture_date, "
-                   "sort_date, "
-                   "right_ascension, "
-                   "declination, "
-                   "e00_fits_exists, "
-                   "e13_fits_exists, "
-                   "e13_jpg_exists, "
-                   "altitude, "
-                   "azimuth, "
-                   "header) "
-
-                   "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-            )
-
-    # create dummy values
-    base_filename = randomString(26)
-    site = randomString(3)
-    capture_date = f"201{random.randint(0,9)}-0{random.randint(0,9)}-10 0{random.randint(0,9)}:{random.randint(0,9)}{random.randint(0,9)}:{random.randint(0,9)}{random.randint(0,9)}"
-    sort_date = f"201{random.randint(0,9)}-0{random.randint(0,9)}-10 0{random.randint(0,9)}:{random.randint(0,9)}{random.randint(0,9)}:{random.randint(0,9)}{random.randint(0,9)}"
-    right_ascension = random.random()
-    declination = random.random()
-    e00_fits_exists = "True"
-    e13_fits_exists = "True"
-    e13_jpg_exists = "True"
-    altitude = random.random()
-    azimuth = random.random()
-    header = randomString(2000)
-    
-    # These values will be fed into the sql command string (above)
-    attribute_values = [
-        base_filename,
-        site,
-        capture_date,
-        sort_date, # capture_date is also used for the 'sort_date' attribute.
-        right_ascension,
-        declination,
-        e00_fits_exists,
-        e13_fits_exists,
-        e13_jpg_exists,
-        altitude,
-        azimuth,
-        header
-    ]
-    
-    cursor.execute(sql,attribute_values)
-
-def populate_test_database(cursor, connection, numEntries):
-    for _ in tqdm(range(numEntries)):
-        insert_dummy_entry(cursor)
-    connection.commit()    

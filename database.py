@@ -42,7 +42,7 @@ def connect_to_rds():
             #####################################################
 
             #psql.delete_all_entries(cursor, connection)
-            psql.insert_all_entries(cursor, connection, BUCKET)
+            #psql.insert_all_entries(cursor, connection, BUCKET)
 
             #####################################################
         else: 
