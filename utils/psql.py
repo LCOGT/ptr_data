@@ -33,7 +33,6 @@ def insert_all_entries(cursor, connection, bucket):
     items = aws.scan_s3_all_ptr_data(bucket, 0)
 
     for item in tqdm(items): 
-
         file_path = item['file_path']
 
         # convert date format (Fri, 21 Jun 2019 20:23:02 GMT) to (2019-06-21 20:23:02)
@@ -67,7 +66,6 @@ def insert_all_entries(cursor, connection, bucket):
             pass
             
             header_data = aws.scan_header_file(bucket, file_path)
-            
             sql = ("INSERT INTO images("
 
                    "image_root, "
@@ -112,11 +110,16 @@ def insert_all_entries(cursor, connection, bucket):
             airmass = header_data.get('AIRMASS')
             exposure_time = header_data.get('EXPTIME')
             
+<<<<<<< HEAD
             print("capture date: ")
             print(capture_date)
             print(type(capture_date))
             #capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
             
+=======
+            capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+
+>>>>>>> 55675f5aae763fcbae3af7eabdb03766cbb87115
             # These values will be fed into the sql command string (above)
             attribute_values = [
                 base_filename,
@@ -207,3 +210,5 @@ def query_database(cursor, query):
         print("Error while retrieving records:", error)
 
     return images
+
+
