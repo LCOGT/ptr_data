@@ -110,16 +110,11 @@ def insert_all_entries(cursor, connection, bucket):
             airmass = header_data.get('AIRMASS')
             exposure_time = header_data.get('EXPTIME')
             
-<<<<<<< HEAD
             print("capture date: ")
             print(capture_date)
             print(type(capture_date))
             #capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
             
-=======
-            capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
-
->>>>>>> 55675f5aae763fcbae3af7eabdb03766cbb87115
             # These values will be fed into the sql command string (above)
             attribute_values = [
                 base_filename,
