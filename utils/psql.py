@@ -23,13 +23,25 @@ def delete_all_entries(cursor, connection):
     Clear the database of all entries. 
     '''
 
+    cursor.execute("DELETE FROM projects") 
     cursor.execute("DELETE FROM images") 
+    cursor.execute("DELETE FROM users")
     connection.commit()
     print('\n{:^80}\n'.format('**DATABASE IS EMPTY**'))
 
 
 def insert_all_entries(cursor, connection, bucket):
 
+    # INSERT USER INTO USERS TABLES
+    sql = "INSERT into users (user_name) VALUES (%s)"
+    user_name = ["wmd_admin"]
+    cursor.execute(sql, user_name)
+
+    sql_get_user_id = "SELECT user_id FROM users WHERE user_name = %s"
+    cursor.execute(sql_get_user_id,user_name)
+    user_id = cursor.fetchone()
+    
+    # INSERT IMAGE DATA INTO IMAGES TABLE
     items = aws.scan_s3_all_ptr_data(bucket, 0)
 
     for item in tqdm(items): 
@@ -53,13 +65,10 @@ def insert_all_entries(cursor, connection, bucket):
         
         # The site is derived from the beginning of the base filename (eg. 'WMD')
         site = base_filename[0:3] 
-    
-
 
         # This parameter is set to true when an object can write a valid database entry.
         valid_sql_to_execute = False
         items_not_added = 0
-
 
         # Handle text file (which stores the fits header data)
         if file_extension == "txt":
@@ -68,8 +77,8 @@ def insert_all_entries(cursor, connection, bucket):
             header_data = aws.scan_header_file(bucket, file_path)
             sql = ("INSERT INTO images("
 
-                   "image_root, "
-                   "observer, "
+                   "base_filename, "
+                   "created_user, "
                    "site, "
                    "capture_date, "
                    "sort_date, "
@@ -83,9 +92,9 @@ def insert_all_entries(cursor, connection, bucket):
                    "header) "
 
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                   "ON CONFLICT (image_root) DO UPDATE SET "
+                   "ON CONFLICT (base_filename) DO UPDATE SET "
 
-                   "observer = excluded.observer, "
+                   "created_user = excluded.created_user, "
                    "capture_date = excluded.capture_date, "
                    "sort_date = excluded.sort_date, "
                    "right_ascension = excluded.right_ascension, "
@@ -99,7 +108,6 @@ def insert_all_entries(cursor, connection, bucket):
             )
 
             # extract values from header data
-            observer = header_data.get('OBSERVER')
             capture_date = header_data.get('DATE-OBS', last_modified)
             header = header_data.get('JSON')
             right_ascension = header_data.get('MNT-RA')
@@ -110,15 +118,16 @@ def insert_all_entries(cursor, connection, bucket):
             airmass = header_data.get('AIRMASS')
             exposure_time = header_data.get('EXPTIME')
             
-            print("capture date: ")
-            print(capture_date)
-            print(type(capture_date))
-            #capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+            try:
+                capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+            except:
+                print('No capture date found.')
+
             
             # These values will be fed into the sql command string (above)
             attribute_values = [
                 base_filename,
-                observer,
+                user_id,
                 site,
                 capture_date,
                 capture_date, # capture_date is also used for the 'sort_date' attribute.
@@ -144,15 +153,16 @@ def insert_all_entries(cursor, connection, bucket):
             # Create a new element with the primary key, site, and file_exists_attribue=true. 
             # If there is already an element with this primary key, update the state of file_exists_attribute = true
             # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
-        
-            sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
-                    "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+
+            sql = (f"INSERT INTO images (base_filename, created_user, site, sort_date, {file_exists_attribute}) "
+                    "VALUES(%s, %s, %s, %s, %s) ON CONFLICT (base_filename) DO UPDATE "
                     f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
             )
             
             # These values will be fed into the sql command string (above)
             attribute_values = (
                 base_filename, 
+                user_id, 
                 site, 
                 last_modified, 
                 True
@@ -164,20 +174,16 @@ def insert_all_entries(cursor, connection, bucket):
             print(f"[psql.py > insert_all_entries] Unrecognized file type: {file_extension}. Skipping file.")
             items_not_added += 1
 
-        print('hello')
         # Execute the sql if it has been properly created.
         if valid_sql_to_execute: cursor.execute(sql,attribute_values)
-
+    
     connection.commit()
     print("")
     print(f"Successfully added {len(items)-items_not_added} entries to the database.")
     print(f"Failed to add {items_not_added} items.")
 
-
-
-
 def get_last_modified(cursor, connection, k):
-    sql = "SELECT image_root FROM images ORDER BY capture_date DESC LIMIT %d" % k
+    sql = "SELECT base_filename FROM images ORDER BY capture_date DESC LIMIT %d" % k
     try:
         cursor.execute(sql)
         images = cursor.fetchmany(k)
@@ -187,7 +193,7 @@ def get_last_modified(cursor, connection, k):
     return images
 
 def query_database(cursor, query):
-    sql = "SELECT image_root FROM images"
+    sql = "SELECT base_filename FROM images"
 
     if len(query) > 0:
         sql = sql + " WHERE"
