@@ -1,0 +1,35 @@
+
+service: ptrdata
+
+provider:
+  name: aws
+  runtime: python3.7
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+          - "s3:GetBucketNotification"
+          - "s3:PutBucketNotification"
+      Resource:
+        Fn::Join:
+          - ""
+          - - "arn:aws:s3:::photonranch-001 or *"
+
+functions:
+  insert_data:
+    handler: insert_data.main
+    events:
+      - existingS3:
+          bucket: photonranch-001
+          events: 
+          - s3:ObjectCreated:* 
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-plugin-existing-s3
+  - serverless-python-requirements
+
+package:
+  exclude:
+    - venv/**
+    - .env
+    - lambda_tests.txt
