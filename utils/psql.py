@@ -30,7 +30,7 @@ def delete_all_entries(cursor, connection):
 
 def insert_all_entries(cursor, connection, bucket):
 
-    items = aws.scan_s3_all_ptr_data(bucket, 0)
+    items = aws.scan_s3_all_ptr_data(bucket, 0, 'WMD')
 
     for item in tqdm(items): 
         file_path = item['file_path']
@@ -100,7 +100,7 @@ def insert_all_entries(cursor, connection, bucket):
 
             # extract values from header data
             observer = header_data.get('OBSERVER')
-            capture_date = header_data.get('DATE-OBS', last_modified)
+            capture_date = header_data.get('DATE-OBS')
             header = header_data.get('JSON')
             right_ascension = header_data.get('MNT-RA')
             declination = header_data.get('MNT-DEC')
@@ -110,10 +110,14 @@ def insert_all_entries(cursor, connection, bucket):
             airmass = header_data.get('AIRMASS')
             exposure_time = header_data.get('EXPTIME')
             
-            print("capture date: ")
-            print(capture_date)
-            print(type(capture_date))
-            #capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+            # in case the fits header does not have a capture time stored in it
+            try:
+                capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
+                sort_date = capture_date #set this if we have a valid capture time
+            except:
+                capture_date = None
+                sort_date = last_modified #set this if we don't have a valid capture time
+
             
             # These values will be fed into the sql command string (above)
             attribute_values = [
@@ -121,7 +125,7 @@ def insert_all_entries(cursor, connection, bucket):
                 observer,
                 site,
                 capture_date,
-                capture_date, # capture_date is also used for the 'sort_date' attribute.
+                sort_date, 
                 right_ascension,
                 declination,
                 altitude,
@@ -164,7 +168,6 @@ def insert_all_entries(cursor, connection, bucket):
             print(f"[psql.py > insert_all_entries] Unrecognized file type: {file_extension}. Skipping file.")
             items_not_added += 1
 
-        print('hello')
         # Execute the sql if it has been properly created.
         if valid_sql_to_execute: cursor.execute(sql,attribute_values)
 

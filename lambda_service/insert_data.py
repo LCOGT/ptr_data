@@ -96,10 +96,13 @@ def main(event, context):
         airmass = header_data.get('AIRMASS')
         exposure_time = header_data.get('EXPTIME')
         
-        try: 
+        # in case the fits header does not have a capture time stored in it
+        try:
             capture_date = re.sub('T', ' ', capture_date) # format capture time as SQL timestamp
-        except: 
-            capture_date = last_modified
+            sort_date = capture_date #set this if we have a valid capture time
+        except:
+            capture_date = None
+            sort_date = last_modified #set this if we don't have a valid capture time
         
         # These values will be fed into the sql command string (above)
         attribute_values = [
