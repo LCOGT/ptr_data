@@ -47,6 +47,8 @@ def main(event, context):
     print(f"file_extension: {file_extension}")
     print(f"site: {site}")
 
+    # Set user_id
+    user_id = 171
   
     if file_extension == "txt":
             
@@ -54,8 +56,8 @@ def main(event, context):
         
         sql = ("INSERT INTO images("
 
-               "image_root, "
-               "observer, "
+               "base_filename, "
+               "created_user, "
                "site, "
                "capture_date, "
                "sort_date, "
@@ -69,9 +71,9 @@ def main(event, context):
                "header) "
 
                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-               "ON CONFLICT (image_root) DO UPDATE SET "
+               "ON CONFLICT (base_filename) DO UPDATE SET "
 
-               "observer = excluded.observer, "
+               "created_user = excluded.created_user, "
                "capture_date = excluded.capture_date, "
                "sort_date = excluded.sort_date, "
                "right_ascension = excluded.right_ascension, "
@@ -85,7 +87,6 @@ def main(event, context):
         )
 
         # extract values from header data
-        observer = header_data.get('OBSERVER')
         capture_date = header_data.get('DATE-OBS')
         header = header_data.get('JSON')
         right_ascension = header_data.get('MNT-RA')
@@ -104,7 +105,7 @@ def main(event, context):
         # These values will be fed into the sql command string (above)
         attribute_values = [
             base_filename,
-            observer,
+            user_id,
             site,
             capture_date,
             capture_date, # capture_date is also used for the 'sort_date' attribute.
@@ -130,8 +131,8 @@ def main(event, context):
         # If there is already an element with this primary key, update the state of file_exists_attribute = true
         # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
     
-        sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
-                "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+        sql = (f"INSERT INTO images (base_filename, site, sort_date, {file_exists_attribute}) "
+                "VALUES(%s, %s, %s, %s) ON CONFLICT (base_filename) DO UPDATE "
                 f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
         )
         
