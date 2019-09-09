@@ -17,13 +17,14 @@ import json
 from tqdm import tqdm
 
 
-
 def delete_all_entries(cursor, connection):
     '''
     Clear the database of all entries. 
     '''
 
     cursor.execute("DELETE FROM images") 
+    cursor.execute("DELETE FROM users") 
+    cursor.execute("DELETE FROM projects") 
     connection.commit()
     print('\n{:^80}\n'.format('**DATABASE IS EMPTY**'))
 
@@ -31,6 +32,29 @@ def delete_all_entries(cursor, connection):
 def insert_all_entries(cursor, connection, bucket):
 
     items = aws.scan_s3_all_ptr_data(bucket, 0, 'WMD')
+    items.extend(aws.scan_s3_all_ptr_data(bucket, 0, 'wmd'))
+
+    # place a single hard-coded user into the users table under which all images are referenced
+    username = 'wmd_admin'
+    sql = ("INSERT INTO users("
+        "user_name) "
+        "VALUES (%s) "
+        "RETURNING user_id"
+    )
+    cursor.execute(sql,(username,))
+    user_id = cursor.fetchone()
+
+    # place default ALL and TRASH project folders into projects table
+    sql = ("INSERT INTO projects("
+        "project_id, project_name) "
+        "VALUES (%s, %s) "
+        "ON CONFLICT"
+    )
+    project_name = 'All Images'
+    cursor.execute(sql,('0', project_name,))
+    project_name = 'Trash'
+    cursor.execute(sql,('1', project_name,))
+
 
     for item in tqdm(items): 
         file_path = item['file_path']
@@ -55,7 +79,6 @@ def insert_all_entries(cursor, connection, bucket):
         site = base_filename[0:3] 
     
 
-
         # This parameter is set to true when an object can write a valid database entry.
         valid_sql_to_execute = False
         items_not_added = 0
@@ -63,13 +86,24 @@ def insert_all_entries(cursor, connection, bucket):
 
         # Handle text file (which stores the fits header data)
         if file_extension == "txt":
-            pass
             
             header_data = aws.scan_header_file(bucket, file_path)
+
+            # Insert header into headers table and return header_id for use in images table
+            header = header_data.get('JSON')
+            sql = ("INSERT INTO headers("
+                    "header) "
+                    "VALUES (%s) "
+                    "RETURNING header_id"
+                )
+            cursor.execute(sql, (header,))
+            header_id = cursor.fetchone()
+
+            # Insert image record into the images table
             sql = ("INSERT INTO images("
 
-                   "image_root, "
-                   "observer, "
+                   "base_filename, "
+                   "created_user, "
                    "site, "
                    "capture_date, "
                    "sort_date, "
@@ -80,12 +114,12 @@ def insert_all_entries(cursor, connection, bucket):
                    "filter_used, "
                    "airmass, "
                    "exposure_time, "
-                   "header) "
+                   "header_id) "
 
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                   "ON CONFLICT (image_root) DO UPDATE SET "
+                   "ON CONFLICT (base_filename) DO UPDATE SET "
 
-                   "observer = excluded.observer, "
+                   "created_user = excluded.created_user, "
                    "capture_date = excluded.capture_date, "
                    "sort_date = excluded.sort_date, "
                    "right_ascension = excluded.right_ascension, "
@@ -95,13 +129,11 @@ def insert_all_entries(cursor, connection, bucket):
                    "filter_used = excluded.filter_used, "
                    "airmass = excluded.airmass, "
                    "exposure_time = excluded.exposure_time, "
-                   "header = excluded.header;"
+                   "header_id = excluded.header_id;"
             )
 
             # extract values from header data
-            observer = header_data.get('OBSERVER')
             capture_date = header_data.get('DATE-OBS')
-            header = header_data.get('JSON')
             right_ascension = header_data.get('MNT-RA')
             declination = header_data.get('MNT-DEC')
             altitude = header_data.get('ALTITUDE')
@@ -122,7 +154,7 @@ def insert_all_entries(cursor, connection, bucket):
             # These values will be fed into the sql command string (above)
             attribute_values = [
                 base_filename,
-                observer,
+                user_id,
                 site,
                 capture_date,
                 sort_date, 
@@ -133,7 +165,7 @@ def insert_all_entries(cursor, connection, bucket):
                 filter_used,
                 airmass,
                 exposure_time,
-                header
+                header_id
             ]
 
             valid_sql_to_execute = True
@@ -149,8 +181,8 @@ def insert_all_entries(cursor, connection, bucket):
             # If there is already an element with this primary key, update the state of file_exists_attribute = true
             # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
         
-            sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
-                    "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+            sql = (f"INSERT INTO images (base_filename, site, sort_date, {file_exists_attribute}) "
+                    "VALUES(%s, %s, %s, %s) ON CONFLICT (base_filename) DO UPDATE "
                     f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
             )
             
@@ -180,7 +212,7 @@ def insert_all_entries(cursor, connection, bucket):
 
 
 def get_last_modified(cursor, connection, k):
-    sql = "SELECT image_root FROM images ORDER BY capture_date DESC LIMIT %d" % k
+    sql = "SELECT base_filename FROM images ORDER BY capture_date DESC LIMIT %d" % k
     try:
         cursor.execute(sql)
         images = cursor.fetchmany(k)
@@ -190,7 +222,7 @@ def get_last_modified(cursor, connection, k):
     return images
 
 def query_database(cursor, query):
-    sql = "SELECT image_root FROM images"
+    sql = "SELECT base_filename FROM images"
 
     if len(query) > 0:
         sql = sql + " WHERE"
