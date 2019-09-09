@@ -89,8 +89,8 @@ def main(event, context):
         # extract values from header data
         capture_date = header_data.get('DATE-OBS')
         header = header_data.get('JSON')
-        right_ascension = header_data.get('MNT-RA')
-        declination = header_data.get('MNT-DEC')
+        right_ascension = header_data.get('OBJCTRA')
+        declination = header_data.get('OBJCTDEC')
         altitude = header_data.get('ALTITUDE')
         azimuth = header_data.get('AZIMUTH')
         filter_used = header_data.get('FILTER')

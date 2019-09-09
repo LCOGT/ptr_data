@@ -24,11 +24,17 @@ def delete_all_entries(cursor, connection):
     '''
 
     cursor.execute("DELETE FROM images") 
+    cursor.execute("DELETE FROM users")
     connection.commit()
     print('\n{:^80}\n'.format('**DATABASE IS EMPTY**'))
 
 
 def insert_all_entries(cursor, connection, bucket):
+    # Hard-coded user_id, to be replaced once user information is associated with an image
+    sql = ("INSERT INTO users (username) VALUES (%s) RETURNING user_id")
+    username = 'wmd-admin'
+    cursor.execute(sql,(username,))
+    created_user = cursor.fetchone()
 
     items = aws.scan_s3_all_ptr_data(bucket, 0, 'WMD')
 
@@ -68,8 +74,8 @@ def insert_all_entries(cursor, connection, bucket):
             header_data = aws.scan_header_file(bucket, file_path)
             sql = ("INSERT INTO images("
 
-                   "image_root, "
-                   "observer, "
+                   "base_filename, "
+                   "created_user, "
                    "site, "
                    "capture_date, "
                    "sort_date, "
@@ -83,9 +89,9 @@ def insert_all_entries(cursor, connection, bucket):
                    "header) "
 
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                   "ON CONFLICT (image_root) DO UPDATE SET "
+                   "ON CONFLICT (base_filename) DO UPDATE SET "
 
-                   "observer = excluded.observer, "
+                   "created_user = excluded.created_user, "
                    "capture_date = excluded.capture_date, "
                    "sort_date = excluded.sort_date, "
                    "right_ascension = excluded.right_ascension, "
@@ -99,7 +105,6 @@ def insert_all_entries(cursor, connection, bucket):
             )
 
             # extract values from header data
-            observer = header_data.get('OBSERVER')
             capture_date = header_data.get('DATE-OBS')
             header = header_data.get('JSON')
             right_ascension = header_data.get('MNT-RA')
@@ -122,7 +127,7 @@ def insert_all_entries(cursor, connection, bucket):
             # These values will be fed into the sql command string (above)
             attribute_values = [
                 base_filename,
-                observer,
+                created_user,
                 site,
                 capture_date,
                 sort_date, 
@@ -149,8 +154,8 @@ def insert_all_entries(cursor, connection, bucket):
             # If there is already an element with this primary key, update the state of file_exists_attribute = true
             # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
         
-            sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
-                    "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+            sql = (f"INSERT INTO images (base_filename, site, sort_date, {file_exists_attribute}) "
+                    "VALUES(%s, %s, %s, %s) ON CONFLICT (base_filename) DO UPDATE "
                     f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
             )
             
@@ -180,7 +185,7 @@ def insert_all_entries(cursor, connection, bucket):
 
 
 def get_last_modified(cursor, connection, k):
-    sql = "SELECT image_root FROM images ORDER BY capture_date DESC LIMIT %d" % k
+    sql = "SELECT base_filename FROM images ORDER BY capture_date DESC LIMIT %d" % k
     try:
         cursor.execute(sql)
         images = cursor.fetchmany(k)
@@ -189,24 +194,5 @@ def get_last_modified(cursor, connection, k):
 
     return images
 
-def query_database(cursor, query):
-    sql = "SELECT image_root FROM images"
-
-    if len(query) > 0:
-        sql = sql + " WHERE"
-        for k, v in query.items():
-            add = " %s = '%s' AND" % (k ,v)
-            sql = sql + add
-
-        sql = sql[:-3]
-
-    print(sql)
-    try:
-        cursor.execute(sql)
-        images = cursor.fetchall()
-    except (Exception, psycopg2.Error) as error :
-        print("Error while retrieving records:", error)
-
-    return images
 
 
