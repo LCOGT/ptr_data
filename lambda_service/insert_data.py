@@ -16,7 +16,7 @@ def main(event, context):
     # Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
     
-    # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-E00.fits.bz2
+    # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-EX00.fits.bz2
     file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
     
     # Format amazon upload timestamp (yyyy-mm-ddThh:mm:ss.mmmZ) 
@@ -26,14 +26,14 @@ def main(event, context):
     last_modified = last_modified[:-5]
     last_modified = "".join(last_modified)
     
-    # The 'filename' that looks somethign like 'WMD-ea03-20190621-00000007-E00.fits.bz2'
+    # The 'filename' that looks somethign like 'WMD-ea03-20190621-00000007-EX00.fits.bz2'
     file_key = file_path.split('/')[-1]
     
     # The base_filename (aka primary key) is something like 'WMD-ea03-20190621-00000007'
     base_filename = file_key[:26]
     
-    # The data_type is the 'E00' string after the base_filename.
-    data_type = file_key[27:30]
+    # The data_type is the 'EX00' string after the base_filename.
+    data_type = file_key[27:31]
     
     # The file_extension signifies the filetype, such as 'fits' or 'txt'.
     file_extension = file_key.split('.')[1]
