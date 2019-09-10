@@ -32,7 +32,11 @@ def main(event, context):
     # The base_filename (aka primary key) is something like 'WMD-ea03-20190621-00000007'
     base_filename = file_key[:26]
     
+<<<<<<< Updated upstream
     # The data_type is the 'EX00' string after the base_filename.
+=======
+    # The data_type is the 'E00' string after the base_filename.
+>>>>>>> Stashed changes
     data_type = file_key[27:31]
     
     # The file_extension signifies the filetype, such as 'fits' or 'txt'.
@@ -48,7 +52,7 @@ def main(event, context):
     print(f"site: {site}")
 
     # Set user_id
-    user_id = 171
+    user_id = 180
   
     if file_extension == "txt":
             
