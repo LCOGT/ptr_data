@@ -5,11 +5,67 @@ import psycopg2
 import re
 import os
 
+from handler import _remove_connection
+
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+dynamodb = boto3.resource("dynamodb")
+
 s3_c = boto3.client('s3', region_name='us-east-1')
+
+
+"""
+TODO:
+
+0. Refactor/clean!
+
+1. Retrieve subscriber table name from env variable.
+
+2. Send the image package to the user via websockets.
+    (currently the filename is the only thing that is sent, as
+    a prompt to refresh)
+
+3. Move flask api calls to the database into this api instead.
+
+"""
+
+
+
+def _send_to_connection2(gatewayClient, connection_id, data, wss_url):
+    #gatewayapi = boto3.client("apigatewaymanagementapi", endpoint_url=wss_url)
+    return gatewayClient.post_to_connection(
+        ConnectionId=connection_id,
+        Data=json.dumps({"messages":[{"username":"aws", "content": data}]}).encode('utf-8')
+    )
+
+def sendToSubscribers(data):
+
+    wss_url = os.getenv('WSS_URL')
+    gatewayApi = boto3.client("apigatewaymanagementapi", endpoint_url=wss_url)
+
+    # Get all current connections
+    table = dynamodb.Table("photonranch-data-subscribers1")
+    response = table.scan(ProjectionExpression="ConnectionID")
+    items = response.get("Items", [])
+    connections = [x["ConnectionID"] for x in items if "ConnectionID" in x]
+
+    # Send the message data to all connections
+    logger.debug("Broadcasting message: {}".format(data))
+    dataToSend = {"messages": [data]}
+    for connectionID in connections:
+        try: 
+            connectionResponse = _send_to_connection2(gatewayApi, connectionID, dataToSend, os.getenv('WSS_URL'))
+            print('connection response: ')
+            print(json.dumps(connectionResponse))
+        except gatewayApi.exceptions.GoneException:
+            print(f"Failed sending to {connectionID} due to GoneException. Removing it from the connections table.")
+            _remove_connection(connectionID)
+            continue
+
+def main2(event, context):
+    sendToSubscribers("hello")
 
 def main(event, context):
     
@@ -46,6 +102,11 @@ def main(event, context):
     print(f"data_type: {data_type}")
     print(f"file_extension: {file_extension}")
     print(f"site: {site}")
+
+    try:
+        sendToSubscribers(base_filename)
+    except Exception as e:
+        print(e)
 
     # Set user_id
     user_id = 180
@@ -123,7 +184,47 @@ def main(event, context):
         ]
 
         valid_sql_to_execute = True
-        
+
+        #try: 
+            #attributes = [
+                #'image_id',
+                #'base_filename',
+                #'site',
+                #'capture_date',
+                #'sort_date',
+                #'right_ascension',
+                #'declination',
+                #'ex01_fits_exists',
+                #'ex13_fits_exists',
+                #'ex13_jpg_exists',
+                #'altitude',
+                #'azimuth',
+                #'filter_used',
+                #'airmass',
+                #'exposure_time',
+                #'created_user'
+            #]
+            #image_package = {
+                #"base_filename": base_filename,
+                #'site': site,
+                #'capture_date': capture_date,
+                #'sort_date': sort_date,
+                #'right_ascension': right_ascension,
+                #'declination': declination,
+                #'ex01_fits_exists',
+                #'ex13_fits_exists',
+                #'ex13_jpg_exists',
+                #'altitude': altitude,
+                #'azimuth': azimuth,
+                #'filter_used': filter_used,
+                #'airmass': airmass,
+                #'exposure_time' exposure_time,
+                #'created_user': user_id,
+            #}
+            #sendToSubscribers()
+        #except Exception as e:
+            #print(e)
+
     # Handle non-text files (eg. fits or jpg)
     elif file_extension in ['fits', 'jpg']:
         
@@ -242,3 +343,6 @@ def read_s3_body(bucket_name, object_name):
     body = s3_object['Body']
     return body.read()
 
+
+if __name__=="__main__":
+    main({},{})
