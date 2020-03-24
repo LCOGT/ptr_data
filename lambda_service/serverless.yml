@@ -7,6 +7,7 @@ provider:
   name: aws
   runtime: python3.7
   environment: 
+    SUBSCRIBERS_TABLE: photonranch-data-subscribers1
     WSS_URL:
       Fn::Join:
         - ""
@@ -85,7 +86,7 @@ resources:
     dataSubscribers: 
       Type: AWS::DynamoDB::Table
       Properties:
-        TableName: photonranch-data-subscribers1
+        TableName: ${self:provider.environment.SUBSCRIBERS_TABLE}
         AttributeDefinitions:
           - AttributeName: ConnectionID
             AttributeType: S

@@ -103,10 +103,6 @@ def main(event, context):
     print(f"file_extension: {file_extension}")
     print(f"site: {site}")
 
-    try:
-        sendToSubscribers(base_filename)
-    except Exception as e:
-        print(e)
 
     # Set user_id
     user_id = 180
@@ -283,6 +279,14 @@ def main(event, context):
         if(connection):
             cursor.close()
             connection.close()
+
+    # After we update the database, notify subscribers.
+    try:
+        print('sending to subscribers: ')
+        sendToSubscribers(base_filename)
+    except Exception as e:
+        print('failed to send to subscribers: ')
+        print(e)
 
     return True
 

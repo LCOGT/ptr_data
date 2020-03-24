@@ -17,6 +17,7 @@ TODO:
 2. Clean/Refactor
 
 """
+SUBSCRIBERS_TABLE = os.getenv('SUBSCRIBERS_TABLE')
 
 def _get_response(status_code, body):
     if not isinstance(body, str):
@@ -34,7 +35,7 @@ def connection_manager(event, context):
         logger.info("Connect requested")
 
         # Add connectionID to the database
-        table = dynamodb.Table("photonranch-data-subscribers1")
+        table = dynamodb.Table(SUBSCRIBERS_TABLE)
         table.put_item(Item={
             "ConnectionID": connectionID, 
             #"Observatory": observatory
@@ -61,7 +62,7 @@ def connection_manager(event, context):
         return _get_response(500, "Unrecognized eventType.")
 
 def _remove_connection(connectionID):
-    table = dynamodb.Table("photonranch-data-subscribers1")
+    table = dynamodb.Table(SUBSCRIBERS_TABLE)
     response = table.delete_item(Key={
         "ConnectionID": connectionID
     })
