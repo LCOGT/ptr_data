@@ -33,11 +33,11 @@ TODO:
 
 
 
-def _send_to_connection2(gatewayClient, connection_id, data, wss_url):
+def _send_to_connection(gatewayClient, connection_id, data, wss_url):
     #gatewayapi = boto3.client("apigatewaymanagementapi", endpoint_url=wss_url)
     return gatewayClient.post_to_connection(
         ConnectionId=connection_id,
-        Data=json.dumps({"messages":[{"username":"aws", "content": data}]}).encode('utf-8')
+        Data=json.dumps({"messages":[{"content": data}]}).encode('utf-8')
     )
 
 def sendToSubscribers(data):
@@ -56,7 +56,7 @@ def sendToSubscribers(data):
     dataToSend = {"messages": [data]}
     for connectionID in connections:
         try: 
-            connectionResponse = _send_to_connection2(gatewayApi, connectionID, dataToSend, os.getenv('WSS_URL'))
+            connectionResponse = _send_to_connection(gatewayApi, connectionID, dataToSend, os.getenv('WSS_URL'))
             print('connection response: ')
             print(json.dumps(connectionResponse))
         except gatewayApi.exceptions.GoneException:
@@ -64,15 +64,12 @@ def sendToSubscribers(data):
             _remove_connection(connectionID)
             continue
 
-def main2(event, context):
-    sendToSubscribers("hello")
-
 def main(event, context):
     
     # Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
     
-    # Sample file_path is like: WMD/raw_data/2019/WMD-ea03-20190621-00000007-EX00.fits.bz2
+    # Sample file_path is like: data/wmd-ea03-20190621-00000007-EX00.fits.bz2
     file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
     
     # Format amazon upload timestamp (yyyy-mm-ddThh:mm:ss.mmmZ) 
@@ -82,10 +79,10 @@ def main(event, context):
     last_modified = last_modified[:-5]
     last_modified = "".join(last_modified)
     
-    # The 'filename' that looks somethign like 'WMD-ea03-20190621-00000007-EX00.fits.bz2'
+    # The 'filename' that looks somethign like 'wmd-ea03-20190621-00000007-EX00.fits.bz2'
     file_key = file_path.split('/')[-1]
     
-    # The base_filename (aka primary key) is something like 'WMD-ea03-20190621-00000007'
+    # The base_filename (aka primary key) is something like 'wmd-ea03-20190621-00000007'
     base_filename = file_key[:26]
     
     # The data_type is the 'EX00' string after the base_filename.
@@ -94,7 +91,7 @@ def main(event, context):
     # The file_extension signifies the filetype, such as 'fits' or 'txt'.
     file_extension = file_key.split('.')[1]
     
-    # The site is derived from the beginning of the base filename (eg. 'WMD')
+    # The site is derived from the beginning of the base filename (eg. 'wmd')
     site = base_filename[0:3] 
     
     print(f"file_path: {file_path}")
@@ -105,7 +102,7 @@ def main(event, context):
 
 
     # Set user_id
-    user_id = 180
+    old_user_id = 180
   
     if file_extension == "txt":
             
@@ -125,9 +122,11 @@ def main(event, context):
                "filter_used, "
                "airmass, "
                "exposure_time, "
+               "user_id, "
+               "username, "
                "header) "
 
-               "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+               "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                "ON CONFLICT (base_filename) DO UPDATE SET "
 
                "created_user = excluded.created_user, "
@@ -140,6 +139,8 @@ def main(event, context):
                "filter_used = excluded.filter_used, "
                "airmass = excluded.airmass, "
                "exposure_time = excluded.exposure_time, "
+               "user_id = excluded.user_id, "
+               "username = excluded.username, "
                "header = excluded.header;"
         )
 
@@ -153,6 +154,8 @@ def main(event, context):
         filter_used = header_data.get('FILTER')
         airmass = header_data.get('AIRMASS')
         exposure_time = header_data.get('EXPTIME')
+        user_id = header_data.get('USERID')
+        username = header_data.get('USERNAME')
         
         # in case the fits header does not have a capture time stored in it
         try:
@@ -165,7 +168,7 @@ def main(event, context):
         # These values will be fed into the sql command string (above)
         attribute_values = [
             base_filename,
-            user_id,
+            old_user_id,
             site,
             capture_date,
             capture_date, # capture_date is also used for the 'sort_date' attribute.
@@ -176,6 +179,8 @@ def main(event, context):
             filter_used,
             airmass,
             exposure_time,
+            user_id,
+            username,
             header
         ]
 
@@ -248,7 +253,6 @@ def main(event, context):
 
     else:
         print(f"Unrecognized file type: {file_extension}. Skipping file.")
-        items_not_added += 1
     
    
     connection = None
