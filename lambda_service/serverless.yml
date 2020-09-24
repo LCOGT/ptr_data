@@ -3,10 +3,25 @@ app: photonranch
 
 service: ptrdata
 
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-plugin-existing-s3
+  - serverless-python-requirements
+
+package:
+  exclude:
+    - venv/**
+    - .env
+    - lambda_tests.txt
+
 provider:
   name: aws
+  region: us-east-1
   runtime: python3.7
   environment: 
+    REGION: ${self:provider.region}
+    BUCKET_NAME: photonranch-001
+    DB_ADDRESS: ${ssm:db-url}
     SUBSCRIBERS_TABLE: photonranch-data-subscribers1
     WSS_URL:
       Fn::Join:
@@ -23,7 +38,10 @@ provider:
       Resource:
         Fn::Join:
           - ""
-          - - "arn:aws:s3:::photonranch-001 or *"
+          - - "arn:aws:s3:::"
+            - ${self:provider.environment.BUCKET_NAME}
+            - "or *"
+
     - Effect: Allow 
       Action: 
         - "execute-api:ManageConnections"
@@ -45,16 +63,25 @@ provider:
         - dynamodb:GetShardIterator
         - dynamodb:ListStreams
       Resource:
-        - "arn:aws:dynamodb:us-east-1:*:*"
+        Fn::Join:
+          - ""
+          - - "arn:aws:dynamodb:"
+            - ${self:provider.region}
+            - ":*:*"
+
 
 functions:
+
   insert_data:
     handler: insert_data.main
+    layers:
+      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:8
     events:
       - existingS3:
-          bucket: photonranch-001
+          bucket: ${self:provider.environment.BUCKET_NAME}
           events: 
           - s3:ObjectCreated:* 
+
   connectionManager:
     handler: handler.connection_manager
     events:
@@ -62,26 +89,16 @@ functions:
           route: $connect
       - websocket:
           route: $disconnect
+
   defaultMessage:
     handler: handler.default_message
     events:
       - websocket:
           route: $default
 
-plugins:
-  - serverless-dotenv-plugin
-  - serverless-plugin-existing-s3
-  - serverless-python-requirements
-
-package:
-  exclude:
-    - venv/**
-    - .env
-    - lambda_tests.txt
 
 resources:
   Resources:
-
     # This table tracks websocket clients that recieve data updates.
     dataSubscribers: 
       Type: AWS::DynamoDB::Table
@@ -90,13 +107,9 @@ resources:
         AttributeDefinitions:
           - AttributeName: ConnectionID
             AttributeType: S
-          #- AttributeName: Observatory
-            #AttributeType: S
         KeySchema:
           - AttributeName: ConnectionID
             KeyType: HASH
-          #- AttributeName: Observatory
-            #KeyType: RANGE
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1

@@ -6,13 +6,14 @@ import re
 import os
 
 from handler import _remove_connection
+from db import update_header_data, update_new_image
+from db import DB_ADDRESS
 
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb")
-
 s3_c = boto3.client('s3', region_name='us-east-1')
 
 
@@ -32,13 +33,13 @@ TODO:
 """
 
 
-
 def _send_to_connection(gatewayClient, connection_id, data, wss_url):
     #gatewayapi = boto3.client("apigatewaymanagementapi", endpoint_url=wss_url)
     return gatewayClient.post_to_connection(
         ConnectionId=connection_id,
         Data=json.dumps({"messages":[{"content": data}]}).encode('utf-8')
     )
+
 
 def sendToSubscribers(data):
 
@@ -64,25 +65,32 @@ def sendToSubscribers(data):
             _remove_connection(connectionID)
             continue
 
+
 def main(event, context):
     
     # Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
     
     # Sample file_path is like: data/wmd-ea03-20190621-00000007-EX00.fits.bz2
-    file_path = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    file_path = urllib.parse.unquote_plus(
+            event['Records'][0]['s3']['object']['key'], 
+            encoding='utf-8'
+        )
     
     # Format amazon upload timestamp (yyyy-mm-ddThh:mm:ss.mmmZ) 
     # to psql timestamp without timezone (yyyy-mm-dd hh:mm:ss).
-    last_modified = list(urllib.parse.unquote_plus(event['Records'][0]['eventTime']))
+    last_modified = list(urllib.parse.unquote_plus(
+            event['Records'][0]['eventTime']))
     last_modified[10] = ' '
     last_modified = last_modified[:-5]
     last_modified = "".join(last_modified)
     
-    # The 'filename' that looks somethign like 'wmd-ea03-20190621-00000007-EX00.fits.bz2'
+    # The 'filename' that looks something like 
+    # 'wmd-ea03-20190621-00000007-EX00.fits.bz2'
     file_key = file_path.split('/')[-1]
     
-    # The base_filename (aka primary key) is something like 'wmd-ea03-20190621-00000007'
+    # The base_filename (aka primary key) is something like 
+    # 'wmd-ea03-20190621-00000007'
     base_filename = file_key[:26]
     
     # The data_type is the 'EX00' string after the base_filename.
@@ -94,13 +102,98 @@ def main(event, context):
     # The site is derived from the beginning of the base filename (eg. 'wmd')
     site = base_filename[0:3] 
     
-    print(f"file_path: {file_path}")
-    print(f"base filename: {base_filename}")
-    print(f"data_type: {data_type}")
-    print(f"file_extension: {file_extension}")
-    print(f"site: {site}")
+    logger.info(f"file_path: {file_path}")
+    logger.info(f"base filename: {base_filename}")
+    logger.info(f"data_type: {data_type}")
+    logger.info(f"file_extension: {file_extension}")
+    logger.info(f"site: {site}")
+
+    # If the new file is the header file (in txt format)
+    if file_extension == 'txt':
+        # Parse the header txt file
+        header_data = scan_header_file(bucket, file_path)
+        # Update the database
+        update_header_data(DB_ADDRESS, base_filename, header_data)
+    # If the new file is an image (jpg or fits)
+    elif file_extension in ['jpg', 'fits']:
+        update_new_image(DB_ADDRESS, base_filename, data_type, file_extension)
+    # Unknown file type:
+    else: 
+        logger.warn(f"Unrecognized file type: {file_extension}. Skipping file.")
+
+    # After we update the database, notify subscribers.
+    try:
+        print('sending to subscribers: ')
+        sendToSubscribers(base_filename)
+    except Exception as e:
+        print('failed to send to subscribers: ')
+        print(e)
+
+    return True
 
 
+def scan_header_file(bucket, path):
+    """
+    Create a python dict from a fits-header-formatted text file in s3.
+
+    :param bucket: String name of s3 bucket.
+    :param path: String path to a text file in the bucket. 
+        note - this file is assumed to be formatted as a fits header.
+    :return: dictionary representation the fits header txt file.
+    """
+    data_entry = {}
+    fits_line_length = 80
+
+    contents = read_s3_body(bucket, path)
+    
+    for i in range(0, len(contents), fits_line_length):
+        single_header_line = contents[i:i+fits_line_length].decode('utf8')
+
+
+        # Split header lines according to the FITS header format
+        values = re.split('=|/|',single_header_line)
+        
+        # Get the attribute and value for each line in the header.
+        try:
+
+            # The first 8 characters contains the attribute.
+            attribute = single_header_line[:8].strip()
+            # The rest of the characters contain the value (and sometimes a comment).
+            after_attr = single_header_line[10:-1]
+
+            # If the value (and not in a comment) is a string, then 
+            # we want the contents inside the single-quotes.
+            if "'" in after_attr.split('/')[0]:
+                value = after_attr.split("'")[1].strip()
+            
+            # Otherwise, get the string preceding a comment (comments start with '/')
+            else: 
+                value = after_attr.split("/")[0].strip()
+
+            # Add the attribute/value to a dict
+            data_entry[attribute] = value
+
+            if attribute == 'END': break
+        
+        except Exception as e:
+            print(f"Error with parsing fits header: {e}")
+
+    # Add the JSON representation of the data_entry to itself as the header attribute
+    data_entry['JSON'] = json.dumps(data_entry)
+
+    return data_entry
+
+def read_s3_body(bucket_name, object_name):
+    s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
+    body = s3_object['Body']
+    return body.read()
+
+
+if __name__=="__main__":
+    main({},{})
+
+
+def temporary_code_storate():
     # Set user_id
     old_user_id = 180
   
@@ -283,74 +376,3 @@ def main(event, context):
         if(connection):
             cursor.close()
             connection.close()
-
-    # After we update the database, notify subscribers.
-    try:
-        print('sending to subscribers: ')
-        sendToSubscribers(base_filename)
-    except Exception as e:
-        print('failed to send to subscribers: ')
-        print(e)
-
-    return True
-
-
-def scan_header_file(bucket, path):
-    """
-    Create a python dict from a fits-header-formatted text file in s3.
-
-    :param bucket: String name of s3 bucket.
-    :param path: String path to a text file in the bucket. 
-        note - this file is assumed to be formatted as a fits header.
-    :return: dictionary representation the fits header txt file.
-    """
-    data_entry = {}
-    fits_line_length = 80
-
-    contents = read_s3_body(bucket, path)
-    
-    for i in range(0, len(contents), fits_line_length):
-        single_header_line = contents[i:i+fits_line_length].decode('utf8')
-
-
-        # Split header lines according to the FITS header format
-        values = re.split('=|/|',single_header_line)
-        
-        # Get the attribute and value for each line in the header.
-        try:
-
-            # The first 8 characters contains the attribute.
-            attribute = single_header_line[:8].strip()
-            # The rest of the characters contain the value (and sometimes a comment).
-            after_attr = single_header_line[10:-1]
-
-            # If the value (and not in a comment) is a string, then 
-            # we want the contents inside the single-quotes.
-            if "'" in after_attr.split('/')[0]:
-                value = after_attr.split("'")[1].strip()
-            
-            # Otherwise, get the string preceding a comment (comments start with '/')
-            else: 
-                value = after_attr.split("/")[0].strip()
-
-            # Add the attribute/value to a dict
-            data_entry[attribute] = value
-
-            if attribute == 'END': break
-        
-        except Exception as e:
-            print(f"Error with parsing fits header: {e}")
-
-    # Add the JSON representation of the data_entry to itself as the header attribute
-    data_entry['JSON'] = json.dumps(data_entry)
-
-    return data_entry
-
-def read_s3_body(bucket_name, object_name):
-    s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
-    body = s3_object['Body']
-    return body.read()
-
-
-if __name__=="__main__":
-    main({},{})
