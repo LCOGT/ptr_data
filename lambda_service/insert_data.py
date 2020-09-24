@@ -65,6 +65,8 @@ def sendToSubscribers(data):
             continue
 
 def main(event, context):
+
+    logger.info(event)
     
     # Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
