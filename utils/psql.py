@@ -6,6 +6,9 @@ TODO: create a method that will scan the database for entries, compare them
       with the items in s3, and apply any updates (rather than an entire
       delete + insert sequence).
 
+TODO: remove hardcoded site, created_user values.
+TODO: if right_ascension is presented in sexagesimal format, convert to decimal rather than skipping
+
 """
 
 from utils import aws
@@ -15,6 +18,7 @@ import re
 from datetime import datetime
 import json
 from tqdm import tqdm
+from PyAstronomy import pyasl
 
 
 
@@ -24,13 +28,23 @@ def delete_all_entries(cursor, connection):
     '''
 
     cursor.execute("DELETE FROM images") 
+    cursor.execute("DELETE FROM users")
     connection.commit()
     print('\n{:^80}\n'.format('**DATABASE IS EMPTY**'))
 
 
 def insert_all_entries(cursor, connection, bucket):
+    items = aws.scan_s3_all_ptr_data(bucket, 0, 'wmd')
 
-    items = aws.scan_s3_all_ptr_data(bucket, 0, 'WMD')
+    #place a single hard-coded user into the users table under which all images are referenced
+    username = 'wmd_admin'
+    sql = ("INSERT INTO users("
+        "user_name) "
+        "VALUES (%s) "
+        "RETURNING user_id"
+    )
+    cursor.execute(sql,(username,))
+    created_user = cursor.fetchone()
 
     for item in tqdm(items): 
         file_path = item['file_path']
@@ -46,7 +60,7 @@ def insert_all_entries(cursor, connection, bucket):
         base_filename = file_key[:26]
         
         # The data_type is the 'E00' string after the base_filename.
-        data_type = file_key[27:30]
+        data_type = file_key[27:31]
         
         # The file_extension signifies the filetype, such as 'fits' or 'txt'.
         file_extension = file_key.split('.')[1]
@@ -63,13 +77,12 @@ def insert_all_entries(cursor, connection, bucket):
 
         # Handle text file (which stores the fits header data)
         if file_extension == "txt":
-            pass
             
             header_data = aws.scan_header_file(bucket, file_path)
             sql = ("INSERT INTO images("
 
-                   "image_root, "
-                   "observer, "
+                   "base_filename, "
+                   "created_user, "
                    "site, "
                    "capture_date, "
                    "sort_date, "
@@ -83,9 +96,9 @@ def insert_all_entries(cursor, connection, bucket):
                    "header) "
 
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
-                   "ON CONFLICT (image_root) DO UPDATE SET "
+                   "ON CONFLICT (base_filename) DO UPDATE SET "
 
-                   "observer = excluded.observer, "
+                   "created_user = excluded.created_user, "
                    "capture_date = excluded.capture_date, "
                    "sort_date = excluded.sort_date, "
                    "right_ascension = excluded.right_ascension, "
@@ -99,11 +112,10 @@ def insert_all_entries(cursor, connection, bucket):
             )
 
             # extract values from header data
-            observer = header_data.get('OBSERVER')
             capture_date = header_data.get('DATE-OBS')
             header = header_data.get('JSON')
-            right_ascension = header_data.get('MNT-RA')
-            declination = header_data.get('MNT-DEC')
+            right_ascension = header_data.get('OBJCTRA')
+            declination = header_data.get('OBJCTDEC')
             altitude = header_data.get('ALTITUDE')
             azimuth = header_data.get('AZIMUTH')
             filter_used = header_data.get('FILTER')
@@ -118,11 +130,18 @@ def insert_all_entries(cursor, connection, bucket):
                 capture_date = None
                 sort_date = last_modified #set this if we don't have a valid capture time
 
+            # Check that RA and DEC are in deg format, not sexagesimal
+            print(right_ascension)
+            if right_ascension is not None and "." in right_ascension:
+                pass
+            else:
+                right_ascension = None
+                declination = None
             
             # These values will be fed into the sql command string (above)
             attribute_values = [
                 base_filename,
-                observer,
+                created_user,
                 site,
                 capture_date,
                 sort_date, 
@@ -149,8 +168,8 @@ def insert_all_entries(cursor, connection, bucket):
             # If there is already an element with this primary key, update the state of file_exists_attribute = true
             # TODO: rewrite to avoid injection vulnerability. Risk is lower because site code automatically controls the filenames, but still not good.
         
-            sql = (f"INSERT INTO images (image_root, site, sort_date, {file_exists_attribute}) "
-                    "VALUES(%s, %s, %s, %s) ON CONFLICT (image_root) DO UPDATE "
+            sql = (f"INSERT INTO images (base_filename, site, sort_date, {file_exists_attribute}) "
+                    "VALUES(%s, %s, %s, %s) ON CONFLICT (base_filename) DO UPDATE "
                     f"SET {file_exists_attribute} = excluded.{file_exists_attribute};"
             )
             
@@ -169,7 +188,12 @@ def insert_all_entries(cursor, connection, bucket):
             items_not_added += 1
 
         # Execute the sql if it has been properly created.
-        if valid_sql_to_execute: cursor.execute(sql,attribute_values)
+        if valid_sql_to_execute: 
+            cursor.execute(sql,attribute_values)
+            # try:
+            #     cursor.execute(sql,attribute_values)
+            # except:
+            #     print(f"There was an error when reading {base_filename}. RA, DEC: {right_ascension}, {declination}")
 
     connection.commit()
     print("")
@@ -180,7 +204,7 @@ def insert_all_entries(cursor, connection, bucket):
 
 
 def get_last_modified(cursor, connection, k):
-    sql = "SELECT image_root FROM images ORDER BY capture_date DESC LIMIT %d" % k
+    sql = "SELECT base_filename FROM images ORDER BY capture_date DESC LIMIT %d" % k
     try:
         cursor.execute(sql)
         images = cursor.fetchmany(k)
@@ -189,24 +213,5 @@ def get_last_modified(cursor, connection, k):
 
     return images
 
-def query_database(cursor, query):
-    sql = "SELECT image_root FROM images"
-
-    if len(query) > 0:
-        sql = sql + " WHERE"
-        for k, v in query.items():
-            add = " %s = '%s' AND" % (k ,v)
-            sql = sql + add
-
-        sql = sql[:-3]
-
-    print(sql)
-    try:
-        cursor.execute(sql)
-        images = cursor.fetchall()
-    except (Exception, psycopg2.Error) as error :
-        print("Error while retrieving records:", error)
-
-    return images
 
 
