@@ -26,7 +26,20 @@ logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 
 Base = declarative_base()
-DB_ADDRESS = os.getenv('DB_ADDRESS')
+
+ssm = boto3.client('ssm')
+def get_secret(key):
+    """
+    Some parameters are stored in AWS Systems Manager Parameter Store.
+    This replaces the .env variables we used to use with flask.
+    """
+    resp = ssm.get_parameter(
+    	Name=key,
+    	WithDecryption=True
+    )
+    return resp['Parameter']['Value']
+
+DB_ADDRESS = get_secret('db-url')
 
 
 @contextmanager
@@ -48,6 +61,12 @@ def get_session(db_address):
     finally:
         session.close()
 
+def keyvalgen(obj):
+    """ Generate attr name/val pairs, filtering out SQLA attrs."""
+    excl = ('_sa_adapter', '_sa_instance_state')
+    for k, v in vars(obj).items():
+        if not k.startswith('_') and not any(hasattr(v, a) for a in excl):
+            yield k, v
 
 class Image(Base):
     __tablename__ = 'images'
@@ -75,7 +94,11 @@ class Image(Base):
     header           = Column(String)
 
     def __init__(self, **kwargs):
-        self.base_filename = base_filename
+        super(Image, self).__init__(**kwargs)
+
+    def __repr__(self):
+        params = ', '.join(f'{k}={v}' for k, v in keyvalgen(self))
+        return f"{self.__class__.__name__}({params})"
 
     def get_image_pkg(self):
         """ A dictionary representation of common image metadata.
@@ -125,7 +148,6 @@ class Image(Base):
         return package
 
 
-
 def update_header_data(db_address, base_filename, header_data):
 
     # specific header values to add to update columns:
@@ -152,7 +174,7 @@ def update_header_data(db_address, base_filename, header_data):
         # Check if entry for this image already exists
         row_exists = session.query(Image.image_id)\
             .filter_by(base_filename=base_filename)\
-            .salar() is not None
+            .scalar() is not None
 
         # If an entry already exists, just update the new bits
         if row_exists:
@@ -172,29 +194,31 @@ def update_header_data(db_address, base_filename, header_data):
 
 def update_new_image(db_address, base_filename, exversion, file_extension):
 
-    file_exists_attribute = f"{exversion.lower()}_{file_extension}_exists"
+    column_name = f"{exversion.lower()}_{file_extension}_exists"
+
+    updates = {}
+    updates[column_name] = True
 
     with get_session(db_address=db_address) as session:
 
         # Check if entry for this image already exists
         row_exists = session.query(Image.image_id)\
             .filter_by(base_filename=base_filename)\
-            .salar() is not None
+            .scalar() is not None
 
         # If an entry already exists, just update the new bits
         if row_exists:
             item = session.query(Image)\
                 .filter(Image.base_filename==base_filename)\
-                .update(Image[file_exists_attribute]=True)
+                .update(updates)
 
         # Create a new row if an entry doesn't exist yet.
         else:
             new_image = Image(
                 base_filename=base_filename,
                 site=base_filename[0:3],
-                Image[file_exists_attribute]=True
+                **updates
             )
             session.add(new_image)
             session.commit()
-
 

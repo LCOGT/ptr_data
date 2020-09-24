@@ -1,4 +1,5 @@
 import boto3
+import os
 from botocore.client import Config
 
 BUCKET_NAME = os.environ['BUCKET_NAME']
