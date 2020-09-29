@@ -8,9 +8,9 @@ __pycache__/
 
 # db credentials
 database.ini
-
 .env
 
 # Serverless Framework
 node_modules/
 .serverless/
+
