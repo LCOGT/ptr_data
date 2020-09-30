@@ -9,14 +9,6 @@ logger.setLevel(logging.DEBUG)
 
 dynamodb = boto3.resource("dynamodb")
 
-"""
-TODO:
-
-1. Retrieve table name from env variable instead of hardcode.
-
-2. Clean/Refactor
-
-"""
 SUBSCRIBERS_TABLE = os.getenv('SUBSCRIBERS_TABLE')
 
 def _get_response(status_code, body):
@@ -47,15 +39,8 @@ def connection_manager(event, context):
         
         # Remove the connectionID from the database
         _remove_connection(connectionID)
-        #table = dynamodb.Table("photonranch-data-subscribers1")
-        #table.delete_item(Key={
-            #"ConnectionID": connectionID
-            ##"Observatory": observatory
-        #}) 
 
         return _get_response(200, "Disconnect successful.")
-
-
 
     else:
         logger.error("Connection manager received unrecognized eventType '{}'")
