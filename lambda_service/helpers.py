@@ -31,3 +31,45 @@ def get_s3_file_url(path, ttl=604800):
         ExpiresIn=ttl
     )
     return url
+
+# Example filename: wmd-ea03-20190621-00000007-EX00.fits.bz2
+def validate_filename(filename):
+
+    parts = filename.split('-')
+
+    # check that the file starts with 3-letter site code 
+    # like 'wmd'
+    site = parts[0] 
+    assert len(site) == 3 and site.isalpha()
+
+    # check for 4-letter instrument name, 
+    # like 'ea03'
+    inst = parts[1]  
+    assert len(inst) == 4
+
+    # check for date formatted as yyymmdd
+    # like '20190621'
+    date = parts[2]  
+    assert len(date) == 8 and date.isdigit()
+
+    # check for 8-digit image number
+    # like '00000007'
+    incr = parts[3]  
+    assert len(incr) == 8 and incr.isdigit()
+
+    extensions = parts[4]   
+    extension_parts = extensions.split('.')
+
+    # check for the EX** indicating filetype, where ** is a 2 digit number
+    # like 'EX01'
+    filetype = extension_parts[0]  
+    assert len(filetype) == 4 and filetype[2:4].isnumeric
+
+    # check for a file extension that is letters only 
+    # like 'txt', 'fits', or 'jpg'
+    file_extension = extension_parts[1]
+    assert file_extension.isalpha()
+
+    return True
+
+

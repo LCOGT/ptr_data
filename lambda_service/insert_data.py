@@ -8,6 +8,7 @@ import os
 from lambda_service.handler import _remove_connection
 from lambda_service.db import update_header_data, update_new_image
 from lambda_service.db import DB_ADDRESS
+from lambda_service.helpers import validate_filename
 
 import logging
 logger = logging.getLogger()
@@ -20,7 +21,6 @@ SUBSCRIBERS_TABLE = os.getenv('SUBSCRIBERS_TABLE')
 
 
 def _send_to_connection(gatewayClient, connection_id, data, wss_url):
-    #gatewayapi = boto3.client("apigatewaymanagementapi", endpoint_url=wss_url)
     return gatewayClient.post_to_connection(
         ConnectionId=connection_id,
         Data=json.dumps({"messages":[{"content": data}]}).encode('utf-8')
@@ -60,7 +60,7 @@ def sendToSubscribers(data):
 
 def handle_s3_object_created(event, context):
 
-    logger.info(event)
+    logger.info("event: ", event)
     
     # Get the object from the event and show its content type
     bucket = event['Records'][0]['s3']['bucket']['name']
@@ -82,6 +82,13 @@ def handle_s3_object_created(event, context):
     # The 'filename' that looks something like 
     # 'wmd-ea03-20190621-00000007-EX00.fits.bz2'
     file_key = file_path.split('/')[-1]
+
+    try:
+        validate_filename(file_key)
+    except AssertionError:
+        logger.exception(f"Unexpected filename {file_key}; failed to update \
+            database")
+        return
     
     # The base_filename (aka primary key) is something like 
     # 'wmd-ea03-20190621-00000007'
@@ -96,11 +103,13 @@ def handle_s3_object_created(event, context):
     # The site is derived from the beginning of the base filename (eg. 'wmd')
     site = base_filename[0:3] 
     
-    logger.info(f"file_path: {file_path}")
-    logger.info(f"base filename: {base_filename}")
-    logger.info(f"data_type: {data_type}")
-    logger.info(f"file_extension: {file_extension}")
-    logger.info(f"site: {site}")
+    logger.info("Parsed filename: ",{
+        "file_path": file_path,
+        "base filename": base_filename,
+        "data_type": data_type,
+        "file_extension": file_extension,
+        "site": site,
+    })
 
     # If the new file is the header file (in txt format)
     if file_extension == 'txt':
