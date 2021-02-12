@@ -71,27 +71,33 @@ def keyvalgen(obj):
 class Image(Base):
     __tablename__ = 'images'
 
-    image_id         = Column(Integer, primary_key=True)
-    base_filename    = Column(String)
-    site             = Column(String)
-    capture_date     = Column(DateTime, default=datetime.utcnow)
-    sort_date        = Column(DateTime, default=datetime.utcnow)
-    right_ascension  = Column(Float)
-    declination      = Column(Float)
-    ex00_fits_exists = Column(Boolean)
-    ex01_fits_exists = Column(Boolean)
-    ex10_fits_exists = Column(Boolean)
-    ex13_fits_exists = Column(Boolean)
-    ex10_jpg_exists  = Column(Boolean)
-    ex13_jpg_exists  = Column(Boolean)
-    altitude         = Column(Float)
-    azimuth          = Column(Float)
-    filter_used      = Column(String)
-    airmass          = Column(Float)
-    exposure_time    = Column(Float)
-    username         = Column(String)
-    user_id          = Column(String)
-    header           = Column(String)
+    image_id          = Column(Integer, primary_key=True)
+    base_filename     = Column(String)
+    site              = Column(String)
+    capture_date      = Column(DateTime, default=datetime.utcnow)
+    sort_date         = Column(DateTime, default=datetime.utcnow)
+    right_ascension   = Column(Float)
+    declination       = Column(Float)
+    altitude          = Column(Float)
+    azimuth           = Column(Float)
+    filter_used       = Column(String)
+    airmass           = Column(Float)
+    exposure_time     = Column(Float)
+    username          = Column(String)
+    user_id           = Column(String)
+    header            = Column(String)
+
+    ex00_fits_exists  = Column(Boolean)
+    ex01_fits_exists  = Column(Boolean)
+    ex10_fits_exists  = Column(Boolean)
+    ex13_fits_exists  = Column(Boolean)
+    ex10_jpg_exists   = Column(Boolean)
+    ex13_jpg_exists   = Column(Boolean)
+
+    raw_fits_exists   = Column(Boolean)
+    small_fits_exists = Column(Boolean)
+    small_jpg_exists  = Column(Boolean)
+
 
     def __init__(self, **kwargs):
         super(Image, self).__init__(**kwargs)
@@ -129,6 +135,11 @@ class Image(Base):
             "ex10_jpg_exists": self.ex10_jpg_exists,
             "ex13_jpg_exists": self.ex13_jpg_exists,
             "ex00_fits_exists": self.ex00_fits_exists,
+
+            "raw_fits_exists": self.raw_fits_exists,
+            "large_cal_fits_exists": self.large_cal_fits_exists,
+            "small_cal_fits_exists": self.small_cal_fits_exists,
+            "small_jpg_exists": self.small_jpg_exists,
 
             "username": self.username,
             "user_id": self.user_id,
@@ -221,4 +232,19 @@ def update_new_image(db_address, base_filename, exversion, file_extension):
             )
             session.add(new_image)
             session.commit()
+
+
+def db_remove_base_filename(base_filename):
+    """ Remove an entire row represented by the data's base filename.
+
+    Args:
+        base_filename (str): identifies what to delete. 
+            Example: wmd-ea03-20190621-00000007
+    """
+
+    with get_session(db_address=DB_ADDRESS) as session:
+        Image.query\
+            .filter(Image.base_filename == base_filename)\
+            .delete()
+        session.commit()
 

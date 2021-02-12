@@ -10,6 +10,8 @@ from lambda_service.db import update_header_data, update_new_image
 from lambda_service.db import DB_ADDRESS
 from lambda_service.helpers import validate_filename
 
+from lambda_service.expirations import add_expiration_entry
+
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -18,6 +20,10 @@ dynamodb = boto3.resource("dynamodb")
 s3_c = boto3.client('s3', region_name='us-east-1')
 
 SUBSCRIBERS_TABLE = os.getenv('SUBSCRIBERS_TABLE')
+
+EXPOSURE_SUFFIX     = "EX"      
+EXPERIMENTAL_SUFFIX = "EP"
+EXPERIMENTAL_TTL    = 7 * 86400 # 7 days
 
 
 def _send_to_connection(gatewayClient, connection_id, data, wss_url):
@@ -110,6 +116,10 @@ def handle_s3_object_created(event, context):
         "file_extension": file_extension,
         "site": site,
     })
+
+    # Set the TTL if the data is of experimental type.
+    if data_type[0:2] == EXPERIMENTAL_SUFFIX:
+        add_expiration_entry(base_filename, EXPERIMENTAL_TTL)
 
     # If the new file is the header file (in txt format)
     if file_extension == 'txt':

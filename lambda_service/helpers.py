@@ -73,3 +73,29 @@ def validate_filename(filename):
     return True
 
 
+def s3_remove_base_filename(base_filename):
+    """ Remove data matching the base_filename from s3.
+
+    This typically includes the header .txt, jpgs, large and small .fits. 
+
+    Args: 
+        base_filename(str): specifies the files to delete from s3. 
+            Example: wmd-ea03-20190621-00000007
+    """
+
+    # first ensure that the base filename is in a valid format. 
+    # otherwise, bad filenames might match with data that shouldn't be deleted.
+
+    # make a full filename used for validation. 
+    # the suffix doesn't matter as long as it's in the right the format for validation
+    filename = f"{base_filename}-EP00.txt"  
+    
+    if validate_filename(filename): 
+
+        prefix_to_delete = f"data/{base_filename}"
+
+        # delete everything in the s3 bucket with the given prefix
+        s3 = boto3.resource('s3')
+        bucket = s3.Bucket(BUCKET_NAME)
+        bucket.objects.filter(Prefix=base_filename).delete()
+
