@@ -88,6 +88,7 @@ def s3_remove_base_filename(base_filename):
 
     # make a full filename used for validation. 
     # the suffix doesn't matter as long as it's in the right the format for validation
+    # TODO: this is confusing; we should just validate the base filename 
     filename = f"{base_filename}-EP00.txt"  
     
     if validate_filename(filename): 

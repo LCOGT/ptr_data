@@ -11,8 +11,8 @@ from lambda_service.helpers import s3_remove_base_filename
 from lambda_service.db import db_remove_base_filename
 
 dynamodb = boto3.resource('dynamodb')
-expiration_table_name = os.getenv('EXPIRATION_TABLE')
-expiration_table = dynamodb.Table(expiration_table_name)
+EXPIRATION_TABLE_NAME = os.getenv('EXPIRATION_TABLE', 'data-expiration-tracker')
+EXPIRATION_TABLE = dynamodb.Table(EXPIRATION_TABLE_NAME)
 
 
 def add_expiration_entry(base_filename, time_to_live_s):
@@ -35,7 +35,7 @@ def add_expiration_entry(base_filename, time_to_live_s):
     }
 
     try:
-        expiration_table.put_item(
+        EXPIRATION_TABLE.put_item(
             Item=entry,
             ConditionExpression=Attr("pk").not_exists()
         )

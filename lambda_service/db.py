@@ -94,9 +94,13 @@ class Image(Base):
     ex10_jpg_exists   = Column(Boolean)
     ex13_jpg_exists   = Column(Boolean)
 
-    raw_fits_exists   = Column(Boolean)
-    small_fits_exists = Column(Boolean)
-    small_jpg_exists  = Column(Boolean)
+    fits_01_exists    = Column(Boolean)
+    fits_10_exists    = Column(Boolean)
+    jpg_medium_exists = Column(Boolean)
+
+    #raw_fits_exists   = Column(Boolean)
+    #small_fits_exists = Column(Boolean)
+    #small_jpg_exists  = Column(Boolean)
 
 
     def __init__(self, **kwargs):
@@ -130,16 +134,21 @@ class Image(Base):
             "altitude": self.altitude,
             "airmass": self.airmass,
 
+            # Old: trying to phase these out...
             "ex01_fits_exists": self.ex01_fits_exists,
             "ex10_fits_exists": self.ex10_fits_exists,
             "ex10_jpg_exists": self.ex10_jpg_exists,
             "ex13_jpg_exists": self.ex13_jpg_exists,
             "ex00_fits_exists": self.ex00_fits_exists,
+            # ...Replaced by the following:
+            "fits_01_exists": self.fits_01_exists,
+            "fits_10_exists": self.fits_10_exists,
+            "jpg_medium_exists": self.jpg_medium_exists,
 
-            "raw_fits_exists": self.raw_fits_exists,
-            "large_cal_fits_exists": self.large_cal_fits_exists,
-            "small_cal_fits_exists": self.small_cal_fits_exists,
-            "small_jpg_exists": self.small_jpg_exists,
+            #"raw_fits_exists": self.raw_fits_exists,
+            #"large_cal_fits_exists": self.large_cal_fits_exists,
+            #"small_cal_fits_exists": self.small_cal_fits_exists,
+            #"small_jpg_exists": self.small_jpg_exists,
 
             "username": self.username,
             "user_id": self.user_id,
@@ -203,12 +212,25 @@ def update_header_data(db_address, base_filename, header_data):
             session.add(new_image)
             session.commit()
 
-def update_new_image(db_address, base_filename, exversion, file_extension):
+def update_new_image(db_address:str, base_filename:str, data_type:str, reduction_level:str, filetype:str):
 
-    column_name = f"{exversion.lower()}_{file_extension}_exists"
+    old_file_exists_column = f"{data_type.lower()}{reduction_level}_{filetype}_exists"
+    file_exists_column = None 
+    if filetype == "jpg" and reduction_level == "10":
+        file_exists_column = "jpg_medium_exists"
+    elif filetype == "fits" and reduction_level == "01":
+            file_exists_column = "fits_01_exists"
+    elif filetype == "fits" and reduction_level == "10": 
+            file_exists_column = "fits_10_exists"
+    
+    if file_exists_column is None:
+        print(f"Unknown filetype added: {base_filename}, {data_type}, {reduction_level}, {filetype}")
+        return
 
     updates = {}
-    updates[column_name] = True
+    updates[file_exists_column] = True
+    updates[old_file_exists_column] = True
+
 
     with get_session(db_address=db_address) as session:
 

@@ -101,7 +101,8 @@ def handle_s3_object_created(event, context):
     base_filename = file_key[:26]
     
     # The data_type is the 'EX00' string after the base_filename.
-    data_type = file_key[27:31]
+    data_type = file_key[27:29]
+    reduction_level = file_key[29:31]
     
     # The file_extension signifies the filetype, such as 'fits' or 'txt'.
     file_extension = file_key.split('.')[1]
@@ -113,12 +114,13 @@ def handle_s3_object_created(event, context):
         "file_path": file_path,
         "base filename": base_filename,
         "data_type": data_type,
+        "reduction_level": reduction_level,
         "file_extension": file_extension,
         "site": site,
     })
 
     # Set the TTL if the data is of experimental type.
-    if data_type[0:2] == EXPERIMENTAL_SUFFIX:
+    if data_type == EXPERIMENTAL_SUFFIX:
         add_expiration_entry(base_filename, EXPERIMENTAL_TTL)
 
     # If the new file is the header file (in txt format)
@@ -129,7 +131,7 @@ def handle_s3_object_created(event, context):
         update_header_data(DB_ADDRESS, base_filename, header_data)
     # If the new file is an image (jpg or fits)
     elif file_extension in ['jpg', 'fits']:
-        update_new_image(DB_ADDRESS, base_filename, data_type, file_extension)
+        update_new_image(DB_ADDRESS, base_filename, data_type, reduction_level, file_extension)
     # Unknown file type:
     else: 
         logger.warn(f"Unrecognized file type {file_extension}. Skipping file.")
