@@ -44,14 +44,15 @@ provider:
   iamRoleStatements:
     - Effect: "Allow"
       Action:
-          - "s3:GetBucketNotification"
-          - "s3:PutBucketNotification"
+          - s3:GetBucketNotification
+          - s3:PutBucketNotification
+          - s3:ListBucket
+          - s3:DeleteObject
       Resource:
         Fn::Join:
           - ""
           - - "arn:aws:s3:::"
             - ${self:provider.environment.BUCKET_NAME}
-            - "or *"
 
     - Effect: Allow
       Action:
@@ -66,14 +67,14 @@ provider:
 
     - Effect: Allow 
       Action: 
-        - "dynamodb:PutItem"
-        - "dynamodb:GetItem"
-        - "dynamodb:UpdateItem"
-        - "dynamodb:DeleteItem"
-        - "dynamodb:BatchGetItem"
-        - "dynamodb:BatchWriteItem"
-        - "dynamodb:Scan"
-        - "dynamodb:Query"
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchGetItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:Scan
+        - dynamodb:Query
         - dynamodb:DescribeStream
         - dynamodb:GetRecords
         - dynamodb:GetShardIterator
@@ -113,7 +114,7 @@ functions:
           route: $default
 
   removeExpiredData:
-    handler: handler.remove_expired_data_handler
+    handler: lambda_service/expirations.remove_expired_data_handler
     events:
       - stream: 
           type: dynamodb

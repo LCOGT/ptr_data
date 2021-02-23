@@ -18,8 +18,8 @@ def get_secret(key):
     )
     return resp['Parameter']['Value']
 
-def get_s3_image_path(base_filename, ex_value, file_extension):
-    full_filename = f"{base_filename}-{ex_value}.{file_extension}"
+def get_s3_image_path(base_filename, data_type, reduction_level, file_type):
+    full_filename = f"{base_filename}-{data_type}{reduction_level}.{file_type}"
     path = f"data/{full_filename}"
     return path
 
@@ -32,8 +32,16 @@ def get_s3_file_url(path, ttl=604800):
     )
     return url
 
-# Example filename: wmd-ea03-20190621-00000007-EX00.fits.bz2
-def validate_filename(filename):
+
+# TODO: It would be useful to refactor all filename helpers into a separate module. That would also provide a place
+# for better filename documentation. 
+# Would the filename be well suited for a simple class? Easy to get any single piece or str representation. 
+
+
+# Example base filename: wmd-ea03-20190621-00000007
+def validate_base_filename(filename):
+
+    assert len(filename) == 26
 
     parts = filename.split('-')
 
@@ -57,20 +65,62 @@ def validate_filename(filename):
     incr = parts[3]  
     assert len(incr) == 8 and incr.isdigit()
 
+    # If no exceptions are raised, the base filename is valid
+    return True
+
+
+
+# Example filename: wmd-ea03-20190621-00000007-EX00.fits.bz2
+def validate_filename(filename):
+
+    parts = filename.split('-')
+
+    base_filename = '-'.join(parts[:4])
+    print(base_filename)
+    assert validate_base_filename(base_filename)
+
     extensions = parts[4]   
     extension_parts = extensions.split('.')
 
-    # check for the EX** indicating filetype, where ** is a 2 digit number
-    # like 'EX01'
-    filetype = extension_parts[0]  
-    assert len(filetype) == 4 and filetype[2:4].isnumeric
+    # check for the data type (usually ex (exposure), sometimes ep (experiemental))
+    # example value: 'EX'
+    data_type = extension_parts[0][0:2] 
+    assert len(data_type) == 2 and data_type.isalpha()
+
+    # check for the reduction_level, which directly follows the data_type.
+    # example value: '01'
+    reduction_level = extension_parts[0][2:4]
+    assert len(reduction_level) == 2 and reduction_level.isdigit()
 
     # check for a file extension that is letters only 
     # like 'txt', 'fits', or 'jpg'
     file_extension = extension_parts[1]
     assert file_extension.isalpha()
 
+    # If none of the assert statements raise an exception, then the filename is valid
     return True
+
+
+def get_base_filename_from_full_filename(full_filename):
+    """ Given a full filename, extract and return the base_filename substring. 
+    
+    Example full filename: tst-aa00-20201231-12345678-EX01.fits.bz2
+    Corresponding base filename: tst-aa00-20201231-12345678
+    """
+    assert validate_filename(full_filename)
+    return '-'.join(full_filename.split('-')[:4])
+
+def get_data_type_from_filename(full_filename):
+    assert validate_filename(full_filename) 
+    return full_filename.split('-')[4].split('.')[0][0:2]
+
+
+def get_site_from_filename(full_filename):
+    assert validate_filename(full_filename)
+    return full_filename[0:3]
+
+
+
 
 
 def s3_remove_base_filename(base_filename):
@@ -85,18 +135,16 @@ def s3_remove_base_filename(base_filename):
 
     # first ensure that the base filename is in a valid format. 
     # otherwise, bad filenames might match with data that shouldn't be deleted.
-
-    # make a full filename used for validation. 
-    # the suffix doesn't matter as long as it's in the right the format for validation
-    # TODO: this is confusing; we should just validate the base filename 
-    filename = f"{base_filename}-EP00.txt"  
-    
-    if validate_filename(filename): 
+    if validate_base_filename(base_filename): 
 
         prefix_to_delete = f"data/{base_filename}"
+        print("prefix to delete: ")
+        print(prefix_to_delete)
 
         # delete everything in the s3 bucket with the given prefix
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(BUCKET_NAME)
-        bucket.objects.filter(Prefix=base_filename).delete()
+        response = bucket.objects.filter(Prefix=base_filename).delete()
+        print("delete response: ")
+        print(response)
 

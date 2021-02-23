@@ -55,7 +55,7 @@ def test_handle_s3_object_created_only_header():
             .filter(Image.base_filename==TEST_BASE_FILENAME)\
             .one()
         print(entry)
-        assert entry.header and not entry.ex10_jpg_exists
+        assert entry.header and not entry.jpg_medium_exists
 
 def test_handle_s3_object_created_only_jpg():
 
@@ -65,7 +65,7 @@ def test_handle_s3_object_created_only_jpg():
         entry = session.query(Image)\
             .filter(Image.base_filename==TEST_BASE_FILENAME)\
             .one()
-        assert entry.ex10_jpg_exists and not entry.header
+        assert entry.jpg_medium_exists and not entry.header
 
 
 def test_handle_s3_object_created_all_files():
@@ -79,5 +79,5 @@ def test_handle_s3_object_created_all_files():
         entry = session.query(Image)\
             .filter(Image.base_filename==TEST_BASE_FILENAME)\
             .one()
-        assert entry.ex10_jpg_exists and entry.header
+        assert entry.fits_10_exists and entry.header
 

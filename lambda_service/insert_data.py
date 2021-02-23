@@ -11,6 +11,8 @@ from lambda_service.db import DB_ADDRESS
 from lambda_service.helpers import validate_filename
 
 from lambda_service.expirations import add_expiration_entry
+from lambda_service.expirations import data_type_has_expiration
+from lambda_service.expirations import get_image_lifespan
 
 import logging
 logger = logging.getLogger()
@@ -123,12 +125,16 @@ def handle_s3_object_created(event, context):
     if data_type == EXPERIMENTAL_SUFFIX:
         add_expiration_entry(base_filename, EXPERIMENTAL_TTL)
 
+    if data_type_has_expiration(data_type):
+        time_until_expiration = get_image_lifespan(file_key)
+        add_expiration_entry(base_filename, time_until_expiration)
+
     # If the new file is the header file (in txt format)
     if file_extension == 'txt':
         # Parse the header txt file
         header_data = scan_header_file(bucket, file_path)
         # Update the database
-        update_header_data(DB_ADDRESS, base_filename, header_data)
+        update_header_data(DB_ADDRESS, base_filename, data_type, header_data)
     # If the new file is an image (jpg or fits)
     elif file_extension in ['jpg', 'fits']:
         update_new_image(DB_ADDRESS, base_filename, data_type, reduction_level, file_extension)
