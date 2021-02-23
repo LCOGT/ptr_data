@@ -4,11 +4,13 @@ venv/
 .vscode/
 __pycache__/
 */__pycache__/*
+.pytest_cache/
 
 # db credentials
 database.ini
-
-*/.env
+.env
 
 # Serverless Framework
 node_modules/
+.serverless/
+

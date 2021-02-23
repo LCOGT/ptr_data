@@ -1,0 +1,162 @@
+org: photonadmin
+app: photonranch
+
+service: ptrdata
+
+plugins:
+  - serverless-dotenv-plugin
+  - serverless-plugin-existing-s3
+  - serverless-python-requirements
+
+package:
+  exclude:
+    - venv/**
+    - node_modules/**
+    - __pycache__/**
+    - .pytest_cache/**
+    - .env
+    - database.ini
+    - lambda_tests.txt
+
+custom: 
+  # This is to reduce the size of the deployment
+  pythonRequirements:
+    useDownloadCache: false
+    useStaticCache: false
+    slim: true
+
+provider:
+  name: aws
+  region: us-east-1
+  runtime: python3.7
+  environment: 
+    REGION: ${self:provider.region}
+    BUCKET_NAME: photonranch-001
+    SUBSCRIBERS_TABLE: photonranch-data-subscribers1
+    EXPIRATION_TABLE: data-expiration-tracker
+    WSS_URL:
+      Fn::Join:
+        - ""
+        - - "https://"
+          - Ref: "WebsocketsApi"
+          - ".execute-api.us-east-1.amazonaws.com/dev"
+
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+          - s3:GetBucketNotification
+          - s3:PutBucketNotification
+          - s3:ListBucket
+          - s3:DeleteObject
+      Resource:
+        Fn::Join:
+          - ""
+          - - "arn:aws:s3:::"
+            - ${self:provider.environment.BUCKET_NAME}
+
+    - Effect: Allow
+      Action:
+        - ssm:GetParameter
+      Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/*"
+
+    - Effect: Allow 
+      Action: 
+        - "execute-api:ManageConnections"
+      Resource:
+        - "arn:aws:execute-api:*:*:**/@connections/*"
+
+    - Effect: Allow 
+      Action: 
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchGetItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:Scan
+        - dynamodb:Query
+        - dynamodb:DescribeStream
+        - dynamodb:GetRecords
+        - dynamodb:GetShardIterator
+        - dynamodb:ListStreams
+      Resource:
+        Fn::Join:
+          - ""
+          - - "arn:aws:dynamodb:"
+            - ${self:provider.region}
+            - ":*:*"
+
+
+functions:
+
+  insert_data:
+    handler: lambda_service/insert_data.handle_s3_object_created
+    layers:
+      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:8
+    events:
+      - existingS3:
+          bucket: ${self:provider.environment.BUCKET_NAME}
+          events: 
+          - s3:ObjectCreated:* 
+
+  connectionManager:
+    handler: lambda_service/handler.connection_manager
+    events:
+      - websocket:
+          route: $connect
+      - websocket:
+          route: $disconnect
+
+  defaultMessage:
+    handler: lambda_service/handler.default_message
+    events:
+      - websocket:
+          route: $default
+
+  removeExpiredData:
+    handler: lambda_service/expirations.remove_expired_data_handler
+    events:
+      - stream: 
+          type: dynamodb
+          badtchSize: 1
+          arn:
+            Fn::GetAtt:
+              - dataExpirationTracker
+              - StreamArn
+
+
+resources:
+  Resources:
+    # This table tracks websocket clients that recieve data updates.
+    dataSubscribers: 
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.SUBSCRIBERS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: ConnectionID
+            AttributeType: S
+        KeySchema:
+          - AttributeName: ConnectionID
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+
+    dataExpirationTracker: 
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.EXPIRATION_TABLE}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TimeToLiveSpecification:
+          AttributeName: expiration_timestamp_s
+          Enabled: true
+        StreamSpecification: 
+          StreamViewType: NEW_AND_OLD_IMAGES
