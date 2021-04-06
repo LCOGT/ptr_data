@@ -33,6 +33,7 @@ provider:
     REGION: ${self:provider.region}
     BUCKET_NAME: photonranch-001
     SUBSCRIBERS_TABLE: photonranch-data-subscribers1
+    EXPIRATION_TABLE: data-expiration-tracker
     WSS_URL:
       Fn::Join:
         - ""
@@ -43,14 +44,15 @@ provider:
   iamRoleStatements:
     - Effect: "Allow"
       Action:
-          - "s3:GetBucketNotification"
-          - "s3:PutBucketNotification"
+          - s3:GetBucketNotification
+          - s3:PutBucketNotification
+          - s3:ListBucket
+          - s3:DeleteObject
       Resource:
         Fn::Join:
           - ""
           - - "arn:aws:s3:::"
             - ${self:provider.environment.BUCKET_NAME}
-            - "or *"
 
     - Effect: Allow
       Action:
@@ -65,14 +67,14 @@ provider:
 
     - Effect: Allow 
       Action: 
-        - "dynamodb:PutItem"
-        - "dynamodb:GetItem"
-        - "dynamodb:UpdateItem"
-        - "dynamodb:DeleteItem"
-        - "dynamodb:BatchGetItem"
-        - "dynamodb:BatchWriteItem"
-        - "dynamodb:Scan"
-        - "dynamodb:Query"
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:BatchGetItem
+        - dynamodb:BatchWriteItem
+        - dynamodb:Scan
+        - dynamodb:Query
         - dynamodb:DescribeStream
         - dynamodb:GetRecords
         - dynamodb:GetShardIterator
@@ -111,6 +113,17 @@ functions:
       - websocket:
           route: $default
 
+  removeExpiredData:
+    handler: lambda_service/expirations.remove_expired_data_handler
+    events:
+      - stream: 
+          type: dynamodb
+          badtchSize: 1
+          arn:
+            Fn::GetAtt:
+              - dataExpirationTracker
+              - StreamArn
+
 
 resources:
   Resources:
@@ -128,3 +141,22 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
+
+    dataExpirationTracker: 
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.EXPIRATION_TABLE}
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TimeToLiveSpecification:
+          AttributeName: expiration_timestamp_s
+          Enabled: true
+        StreamSpecification: 
+          StreamViewType: NEW_AND_OLD_IMAGES

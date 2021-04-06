@@ -10,6 +10,10 @@ from lambda_service.db import update_header_data, update_new_image
 from lambda_service.db import DB_ADDRESS
 from lambda_service.helpers import validate_filename
 
+from lambda_service.expirations import add_expiration_entry
+from lambda_service.expirations import data_type_has_expiration
+from lambda_service.expirations import get_image_lifespan
+
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -18,6 +22,10 @@ dynamodb = boto3.resource("dynamodb")
 s3_c = boto3.client('s3', region_name='us-east-1')
 
 SUBSCRIBERS_TABLE = os.getenv('SUBSCRIBERS_TABLE')
+
+EXPOSURE_SUFFIX     = "EX"      
+EXPERIMENTAL_SUFFIX = "EP"
+EXPERIMENTAL_TTL    = 7 * 86400 # 7 days
 
 
 def _send_to_connection(gatewayClient, connection_id, data, wss_url):
@@ -95,7 +103,8 @@ def handle_s3_object_created(event, context):
     base_filename = file_key[:26]
     
     # The data_type is the 'EX00' string after the base_filename.
-    data_type = file_key[27:31]
+    data_type = file_key[27:29]
+    reduction_level = file_key[29:31]
     
     # The file_extension signifies the filetype, such as 'fits' or 'txt'.
     file_extension = file_key.split('.')[1]
@@ -107,19 +116,28 @@ def handle_s3_object_created(event, context):
         "file_path": file_path,
         "base filename": base_filename,
         "data_type": data_type,
+        "reduction_level": reduction_level,
         "file_extension": file_extension,
         "site": site,
     })
+
+    # Set the TTL if the data is of experimental type.
+    if data_type == EXPERIMENTAL_SUFFIX:
+        add_expiration_entry(base_filename, EXPERIMENTAL_TTL)
+
+    if data_type_has_expiration(data_type):
+        time_until_expiration = get_image_lifespan(file_key)
+        add_expiration_entry(base_filename, time_until_expiration)
 
     # If the new file is the header file (in txt format)
     if file_extension == 'txt':
         # Parse the header txt file
         header_data = scan_header_file(bucket, file_path)
         # Update the database
-        update_header_data(DB_ADDRESS, base_filename, header_data)
+        update_header_data(DB_ADDRESS, base_filename, data_type, header_data)
     # If the new file is an image (jpg or fits)
     elif file_extension in ['jpg', 'fits']:
-        update_new_image(DB_ADDRESS, base_filename, data_type, file_extension)
+        update_new_image(DB_ADDRESS, base_filename, data_type, reduction_level, file_extension)
     # Unknown file type:
     else: 
         logger.warn(f"Unrecognized file type {file_extension}. Skipping file.")

@@ -71,27 +71,28 @@ def keyvalgen(obj):
 class Image(Base):
     __tablename__ = 'images'
 
-    image_id         = Column(Integer, primary_key=True)
-    base_filename    = Column(String)
-    site             = Column(String)
-    capture_date     = Column(DateTime, default=datetime.utcnow)
-    sort_date        = Column(DateTime, default=datetime.utcnow)
-    right_ascension  = Column(Float)
-    declination      = Column(Float)
-    ex00_fits_exists = Column(Boolean)
-    ex01_fits_exists = Column(Boolean)
-    ex10_fits_exists = Column(Boolean)
-    ex13_fits_exists = Column(Boolean)
-    ex10_jpg_exists  = Column(Boolean)
-    ex13_jpg_exists  = Column(Boolean)
-    altitude         = Column(Float)
-    azimuth          = Column(Float)
-    filter_used      = Column(String)
-    airmass          = Column(Float)
-    exposure_time    = Column(Float)
-    username         = Column(String)
-    user_id          = Column(String)
-    header           = Column(String)
+    image_id          = Column(Integer, primary_key=True)
+    base_filename     = Column(String)
+    data_type         = Column(String)
+    site              = Column(String)
+    capture_date      = Column(DateTime, default=datetime.utcnow)
+    sort_date         = Column(DateTime, default=datetime.utcnow)
+    right_ascension   = Column(Float)
+    declination       = Column(Float)
+    altitude          = Column(Float)
+    azimuth           = Column(Float)
+    filter_used       = Column(String)
+    airmass           = Column(Float)
+    exposure_time     = Column(Float)
+    username          = Column(String)
+    user_id           = Column(String)
+    header            = Column(String)
+
+    fits_01_exists    = Column(Boolean)
+    fits_10_exists    = Column(Boolean)
+    jpg_medium_exists = Column(Boolean)
+
+
 
     def __init__(self, **kwargs):
         super(Image, self).__init__(**kwargs)
@@ -114,6 +115,7 @@ class Image(Base):
         package = {
             "image_id": self.image_id,
             "base_filename": self.base_filename,
+            "data_type": self.data_type,
             "site": self.site, 
 
             "exposure_time": self.exposure_time,
@@ -124,11 +126,9 @@ class Image(Base):
             "altitude": self.altitude,
             "airmass": self.airmass,
 
-            "ex01_fits_exists": self.ex01_fits_exists,
-            "ex10_fits_exists": self.ex10_fits_exists,
-            "ex10_jpg_exists": self.ex10_jpg_exists,
-            "ex13_jpg_exists": self.ex13_jpg_exists,
-            "ex00_fits_exists": self.ex00_fits_exists,
+            "fits_01_exists": self.fits_01_exists,
+            "fits_10_exists": self.fits_10_exists,
+            "jpg_medium_exists": self.jpg_medium_exists,
 
             "username": self.username,
             "user_id": self.user_id,
@@ -140,15 +140,15 @@ class Image(Base):
 
         # Include a url to the jpg
         package["jpg_url"] = ""
-        if self.ex10_jpg_exists:
-            path = get_s3_image_path(self.base_filename, "EX10", "jpg")
+        if self.jpg_medium_exists:
+            path = get_s3_image_path(self.base_filename, self.data_type, "10", "jpg")
             url = get_s3_file_url(path)
             package["jpg_url"] = url
 
         return package
 
 
-def update_header_data(db_address, base_filename, header_data):
+def update_header_data(db_address, base_filename, data_type, header_data):
 
     # specific header values to add to update columns:
     updates = {
@@ -162,6 +162,7 @@ def update_header_data(db_address, base_filename, header_data):
         "exposure_time": header_data.get('EXPTIME'),
         "user_id": header_data.get('USERID'),
         "username": header_data.get('USERNAME'),
+        "data_type": data_type,
     }
 
     # format capture/sort time as SQL timestamp
@@ -192,12 +193,29 @@ def update_header_data(db_address, base_filename, header_data):
             session.add(new_image)
             session.commit()
 
-def update_new_image(db_address, base_filename, exversion, file_extension):
+def update_new_image(db_address:str, base_filename:str, data_type:str, reduction_level:str, filetype:str):
 
-    column_name = f"{exversion.lower()}_{file_extension}_exists"
+    # Define the 'reduction_level' values that signify different image types
+    medium_jpg_reduction_values = ["10", "13"]
+    fits_10_reduction_values = ["10", "13"]
+    fits_01_reduction_values = ["00", "01"]
+
+    file_exists_column = None 
+    if filetype == "jpg" and reduction_level in medium_jpg_reduction_values:
+        file_exists_column = "jpg_medium_exists"
+    elif filetype == "fits" and reduction_level in fits_01_reduction_values:
+            file_exists_column = "fits_01_exists"
+    elif filetype == "fits" and reduction_level in fits_10_reduction_values:
+            file_exists_column = "fits_10_exists"
+    
+    if file_exists_column is None:
+        print(f"Unknown filetype added: {base_filename}, {data_type}, {reduction_level}, {filetype}")
+        return
 
     updates = {}
-    updates[column_name] = True
+    updates[file_exists_column] = True
+    updates["data_type"] = data_type
+
 
     with get_session(db_address=db_address) as session:
 
@@ -221,4 +239,24 @@ def update_new_image(db_address, base_filename, exversion, file_extension):
             )
             session.add(new_image)
             session.commit()
+
+
+def db_remove_base_filename(base_filename):
+    """ Remove an entire row represented by the data's base filename.
+
+    Args:
+        base_filename (str): identifies what to delete. 
+            Example: wmd-ea03-20190621-00000007
+    """
+
+    with get_session(db_address=DB_ADDRESS) as session:
+
+        # Identify the row to delete
+        row_to_delete = session.query(Image)\
+            .filter(Image.base_filename == base_filename)\
+            .first()
+
+        # Delete and commit the change
+        session.delete(row_to_delete)
+        session.commit()
 
