@@ -98,20 +98,16 @@ def handle_s3_object_created(event, context):
             database")
         return
     
-    # The base_filename (aka primary key) is something like 
-    # 'wmd-ea03-20190621-00000007'
-    base_filename = file_key[:26]
-    
-    # The data_type is the 'EX00' string after the base_filename.
-    data_type = file_key[27:29]
-    reduction_level = file_key[29:31]
-    
-    # The file_extension signifies the filetype, such as 'fits' or 'txt'.
-    file_extension = file_key.split('.')[1]
-    
-    # The site is derived from the beginning of the base filename (eg. 'wmd')
-    site = base_filename[0:3] 
-    
+    file_parts = parse_file_key(file_key)
+    base_filename = file_parts["base_filename"]
+    file_extension = file_parts["file_extension"]
+    site = file_parts["site"]
+    instrument = file_parts["instrument"]
+    file_date = file_parts["file_date"]
+    file_counter = file_parts["file_counter"]
+    data_type = file_parts["data_type"]
+    reduction_level = file_parts["reduction_level"]
+
     logger.info("Parsed filename: ",{
         "file_path": file_path,
         "base filename": base_filename,
@@ -149,6 +145,23 @@ def handle_s3_object_created(event, context):
     except Exception as e:
         logger.exception(f'failed to send to subscribers: {str(e)}')
 
+def parse_file_key(file_key):
+    filename_no_extension, filename_extension = file_key.split('.', 1)  # only split on the first dot.
+    filename_extension = filename_extension.split('.')[0]
+    site, instrument, file_date, file_counter, data_type_level = filename_no_extension.split('-')
+    data_type = data_type_level[0:2]
+    reduction_level = data_type_level[2:4]
+    base_filename = '-'.join([site, instrument, file_date, file_counter])
+    return {
+        "base_filename": base_filename,
+        "file_extension": filename_extension,
+        "site": site,
+        "instrument": instrument,
+        "file_date": file_date,
+        "file_counter": file_counter,
+        "data_type": data_type,
+        "reduction_level": reduction_level
+    }
 
 def scan_header_file(bucket, path):
     """

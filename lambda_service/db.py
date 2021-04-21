@@ -16,7 +16,7 @@ from sqlalchemy.engine.url import URL # don't need if we get the db-address from
 from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
 from sqlalchemy.exc import ArgumentError
 
-from lambda_service.helpers import get_s3_image_path, get_s3_file_url
+from lambda_service.helpers import get_s3_image_path, get_s3_file_url, get_site_from_base_filename
 
 logger = logging.getLogger(__name__)
 handler = logging.StreamHandler()
@@ -188,7 +188,7 @@ def update_header_data(db_address, base_filename, data_type, header_data):
             new_image = Image(
                 **updates,
                 base_filename=base_filename,
-                site=base_filename[0:3]
+                site=get_site_from_base_filename(base_filename)
             )
             session.add(new_image)
             session.commit()
@@ -234,7 +234,7 @@ def update_new_image(db_address:str, base_filename:str, data_type:str, reduction
         else:
             new_image = Image(
                 base_filename=base_filename,
-                site=base_filename[0:3],
+                site=get_site_from_base_filename(base_filename),
                 **updates
             )
             session.add(new_image)

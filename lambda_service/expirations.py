@@ -11,6 +11,7 @@ from lambda_service.helpers import s3_remove_base_filename
 from lambda_service.helpers import get_data_type_from_filename
 from lambda_service.helpers import get_site_from_filename
 from lambda_service.helpers import get_base_filename_from_full_filename
+from lambda_service.helpers import get_site_from_base_filename
 from lambda_service.helpers import validate_filename
 from lambda_service.db import db_remove_base_filename
 
@@ -81,7 +82,7 @@ def add_expiration_entry(base_filename, time_to_live_s):
     }
 
     # Exception for test images: expiration is 5 minutes after upload
-    if base_filename[0:3] == "tst":
+    if get_site_from_base_filename(base_filename) == "tst":
         entry['expiration_timestamp_s'] = int(time.time() + 300)
 
     try:

@@ -41,14 +41,12 @@ def get_s3_file_url(path, ttl=604800):
 # Example base filename: wmd-ea03-20190621-00000007
 def validate_base_filename(filename):
 
-    assert len(filename) == 26
-
     parts = filename.split('-')
 
     # check that the file starts with 3-letter site code 
     # like 'wmd'
     site = parts[0] 
-    assert len(site) == 3 and site.isalpha()
+    assert len(site) >= 3 and len(site) <=6
 
     # check for 4-letter instrument name, 
     # like 'ea03'
@@ -117,8 +115,12 @@ def get_data_type_from_filename(full_filename):
 
 def get_site_from_filename(full_filename):
     assert validate_filename(full_filename)
-    return full_filename[0:3]
+    return full_filename.split('-')[0]
 
+
+def get_site_from_base_filename(base_filename):
+    assert validate_base_filename(base_filename)
+    return base_filename.split('-')[0]
 
 
 
