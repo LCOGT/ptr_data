@@ -7,9 +7,9 @@ import os
 from astropy.io import fits
 
 from lambda_service.handler import _remove_connection
-from lambda_service.db import update_header_data, update_new_image
+from lambda_service.db import update_header_data, update_new_image, header_data_exists
 from lambda_service.db import DB_ADDRESS
-from lambda_service.helpers import validate_filename
+from lambda_service.helpers import validate_filename, parse_file_key
 
 from lambda_service.expirations import add_expiration_entry
 from lambda_service.expirations import data_type_has_expiration
@@ -64,6 +64,9 @@ def sendToSubscribers(data):
             )
             logger.exception(error_msg)
             _remove_connection(connectionID)
+            continue
+        except Exception as e:
+            print(e)
             continue
 
 
@@ -126,6 +129,12 @@ def handle_s3_object_created(event, context):
     # If the new file is an image (jpg or fits)
     elif file_extension in ['jpg', 'fits']:
         update_new_image(DB_ADDRESS, base_filename, data_type, reduction_level, file_extension)
+
+        # Fallback on the fits file for the header data if the header has not yet been supplied
+        if file_extension=='fits' and not header_data_exists(DB_ADDRESS, base_filename):
+            header_data = get_header_from_fits(bucket, file_path)
+            update_header_data(DB_ADDRESS, base_filename, data_type, header_data)
+
     # Unknown file type:
     else: 
         logger.warn(f"Unrecognized file type {file_extension}. Skipping file.")
@@ -137,23 +146,7 @@ def handle_s3_object_created(event, context):
     except Exception as e:
         logger.exception(f'failed to send to subscribers: {str(e)}')
 
-def parse_file_key(file_key):
-    filename_no_extension, filename_extension = file_key.split('.', 1)  # only split on the first dot.
-    filename_extension = filename_extension.split('.')[0]
-    site, instrument, file_date, file_counter, data_type_level = filename_no_extension.split('-')
-    data_type = data_type_level[0:2]
-    reduction_level = data_type_level[2:4]
-    base_filename = '-'.join([site, instrument, file_date, file_counter])
-    return {
-        "base_filename": base_filename,
-        "file_extension": filename_extension,
-        "site": site,
-        "instrument": instrument,
-        "file_date": file_date,
-        "file_counter": file_counter,
-        "data_type": data_type,
-        "reduction_level": reduction_level
-    }
+
 
 def scan_header_file(bucket, path):
     """

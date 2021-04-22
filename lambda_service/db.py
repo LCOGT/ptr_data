@@ -148,6 +148,15 @@ class Image(Base):
         return package
 
 
+def header_data_exists(db_address, base_filename):
+    with get_session(db_address=db_address) as session: 
+        result = session.query(Image)\
+            .filter_by(base_filename=base_filename)\
+            .one()
+        header_exists = result.header is not None
+    return header_exists
+        
+
 def update_header_data(db_address, base_filename, data_type, header_data):
 
     # specific header values to add to update columns:

@@ -26,8 +26,13 @@ s3_event_ex01_fits = {'Records': [{'eventVersion': '2.1', 'eventSource': 'aws:s3
 def delete_test_entries(base_filename):
     with get_session(db_address=DB_ADDRESS) as session:
         session.query(Image).filter(Image.base_filename==base_filename).delete()
-    
 
+@pytest.fixture 
+def setup_teardown():
+  delete_test_entries(TEST_BASE_FILENAME)
+  yield
+  delete_test_entries(TEST_BASE_FILENAME)
+    
 def add_01fits():
     handle_s3_object_created(s3_event_ex01_fits, {})
 
@@ -45,11 +50,8 @@ def add_10fits():
 ##########  Tests  ###########
 ##############################
 
-def test_handle_s3_object_created_only_header():
-
-    delete_test_entries(TEST_BASE_FILENAME)
+def test_handle_s3_object_created_only_header(setup_teardown):
     add_header()
-
     with get_session(db_address=DB_ADDRESS) as session:
         entry = session.query(Image)\
             .filter(Image.base_filename==TEST_BASE_FILENAME)\
@@ -57,9 +59,7 @@ def test_handle_s3_object_created_only_header():
         print(entry)
         assert entry.header and not entry.jpg_medium_exists
 
-def test_handle_s3_object_created_only_jpg():
-
-    delete_test_entries(TEST_BASE_FILENAME)
+def test_handle_s3_object_created_only_jpg(setup_teardown):
     add_10jpg()
     with get_session(db_address=DB_ADDRESS) as session:
         entry = session.query(Image)\
@@ -68,20 +68,17 @@ def test_handle_s3_object_created_only_jpg():
         assert entry.jpg_medium_exists and not entry.header
 
 
-def test_handle_s3_object_created_only_fits():
-
-    delete_test_entries(TEST_BASE_FILENAME)
+def test_handle_s3_object_created_only_fits(setup_teardown):
     add_10fits()
     with get_session(db_address=DB_ADDRESS) as session:
         entry = session.query(Image)\
             .filter(Image.base_filename==TEST_BASE_FILENAME)\
             .one()
-        assert entry.fits_10_exists and entry.header
+        assert entry.fits_10_exists 
+        assert entry.header is not None
 
 
-def test_handle_s3_object_created_all_files():
-
-    delete_test_entries(TEST_BASE_FILENAME)
+def test_handle_s3_object_created_all_files(setup_teardown):
     add_header()
     add_01fits()
     add_10jpg()
@@ -91,4 +88,3 @@ def test_handle_s3_object_created_all_files():
             .filter(Image.base_filename==TEST_BASE_FILENAME)\
             .one()
         assert entry.fits_10_exists and entry.header
-

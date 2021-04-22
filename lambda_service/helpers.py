@@ -33,6 +33,25 @@ def get_s3_file_url(path, ttl=604800):
     return url
 
 
+def parse_file_key(file_key):
+    filename_no_extension, filename_extension = file_key.split('.', 1)  # only split on the first dot.
+    filename_extension = filename_extension.split('.')[0]
+    site, instrument, file_date, file_counter, data_type_level = filename_no_extension.split('-')
+    data_type = data_type_level[0:2]
+    reduction_level = data_type_level[2:4]
+    base_filename = '-'.join([site, instrument, file_date, file_counter])
+    return {
+        "base_filename": base_filename,
+        "file_extension": filename_extension,
+        "site": site,
+        "instrument": instrument,
+        "file_date": file_date,
+        "file_counter": file_counter,
+        "data_type": data_type,
+        "reduction_level": reduction_level
+    }
+
+
 # TODO: It would be useful to refactor all filename helpers into a separate module. That would also provide a place
 # for better filename documentation. 
 # Would the filename be well suited for a simple class? Easy to get any single piece or str representation. 
@@ -121,8 +140,6 @@ def get_site_from_filename(full_filename):
 def get_site_from_base_filename(base_filename):
     assert validate_base_filename(base_filename)
     return base_filename.split('-')[0]
-
-
 
 
 def s3_remove_base_filename(base_filename):
