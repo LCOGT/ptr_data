@@ -4,6 +4,7 @@ import boto3
 import psycopg2
 import re
 import os
+from astropy.io import fits
 
 from lambda_service.handler import _remove_connection
 from lambda_service.db import update_header_data, update_new_image
@@ -87,7 +88,7 @@ def handle_s3_object_created(event, context):
     last_modified = last_modified[:-5]
     last_modified = "".join(last_modified)
     
-    # The 'filename' that looks something like 
+    # The file_key is the full filename that looks something like 
     # 'wmd-ea03-20190621-00000007-EX00.fits.bz2'
     file_key = file_path.split('/')[-1]
 
@@ -98,6 +99,7 @@ def handle_s3_object_created(event, context):
             database")
         return
     
+    # Extract the various pieces of information from the filename
     file_parts = parse_file_key(file_key)
     base_filename = file_parts["base_filename"]
     file_extension = file_parts["file_extension"]
@@ -108,19 +110,9 @@ def handle_s3_object_created(event, context):
     data_type = file_parts["data_type"]
     reduction_level = file_parts["reduction_level"]
 
-    logger.info("Parsed filename: ",{
-        "file_path": file_path,
-        "base filename": base_filename,
-        "data_type": data_type,
-        "reduction_level": reduction_level,
-        "file_extension": file_extension,
-        "site": site,
-    })
+    logger.info(f"Parsed filename: {file_parts}")
 
-    # Set the TTL if the data is of experimental type.
-    if data_type == EXPERIMENTAL_SUFFIX:
-        add_expiration_entry(base_filename, EXPERIMENTAL_TTL)
-
+    # Set the TTL for images that should expire
     if data_type_has_expiration(data_type):
         time_until_expiration = get_image_lifespan(file_key)
         add_expiration_entry(base_filename, time_until_expiration)
@@ -215,6 +207,14 @@ def scan_header_file(bucket, path):
     # header attribute
     data_entry['JSON'] = json.dumps(data_entry)
     return data_entry
+
+
+def get_header_from_fits(bucket, key):
+    file_url = s3_c.generate_presigned_url('get_object', Params={"Bucket": bucket, "Key": key})
+    fits_file = fits.open(file_url)
+    header = dict(fits_file[0].header)
+    header['JSON'] = json.dumps(header)
+    return header
 
 
 def read_s3_body(bucket_name, object_name):

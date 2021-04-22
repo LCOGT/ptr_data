@@ -81,10 +81,6 @@ def add_expiration_entry(base_filename, time_to_live_s):
         'expiration_timestamp_s': int(time.time() + time_to_live_s)
     }
 
-    # Exception for test images: expiration is 5 minutes after upload
-    if get_site_from_base_filename(base_filename) == "tst":
-        entry['expiration_timestamp_s'] = int(time.time() + 300)
-
     try:
         dynamodb_response = expiration_table.put_item(
             Item=entry,

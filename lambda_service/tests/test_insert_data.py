@@ -68,6 +68,17 @@ def test_handle_s3_object_created_only_jpg():
         assert entry.jpg_medium_exists and not entry.header
 
 
+def test_handle_s3_object_created_only_fits():
+
+    delete_test_entries(TEST_BASE_FILENAME)
+    add_10fits()
+    with get_session(db_address=DB_ADDRESS) as session:
+        entry = session.query(Image)\
+            .filter(Image.base_filename==TEST_BASE_FILENAME)\
+            .one()
+        assert entry.fits_10_exists and entry.header
+
+
 def test_handle_s3_object_created_all_files():
 
     delete_test_entries(TEST_BASE_FILENAME)
