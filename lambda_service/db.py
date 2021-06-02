@@ -27,7 +27,7 @@ logger.setLevel(logging.DEBUG)
 
 Base = declarative_base()
 
-ssm = boto3.client('ssm')
+ssm = boto3.client('ssm', region_name=os.getenv('REGION'))
 def get_secret(key):
     """
     Some parameters are stored in AWS Systems Manager Parameter Store.
@@ -141,7 +141,7 @@ class Image(Base):
         # Include a url to the jpg
         package["jpg_url"] = ""
         if self.jpg_medium_exists:
-            path = get_s3_image_path(self.base_filename, self.data_type, "10", "jpg")
+            path = get_s3_image_path("data", self.base_filename, self.data_type, "10", "jpg")
             url = get_s3_file_url(path)
             package["jpg_url"] = url
 

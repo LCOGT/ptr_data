@@ -1,11 +1,15 @@
 import boto3
 import os
+import re
+import json
+from astropy.io import fits
 from botocore.client import Config
 
 BUCKET_NAME = os.environ['BUCKET_NAME']
 REGION = os.environ['REGION']
 
 ssm_c = boto3.client('ssm', region_name=REGION)
+s3_c = boto3.client('s3', region_name=REGION)
 
 def get_secret(key):
     """
@@ -18,10 +22,12 @@ def get_secret(key):
     )
     return resp['Parameter']['Value']
 
-def get_s3_image_path(base_filename, data_type, reduction_level, file_type):
+
+def get_s3_image_path(s3_directory, base_filename, data_type, reduction_level, file_type):
     full_filename = f"{base_filename}-{data_type}{reduction_level}.{file_type}"
-    path = f"data/{full_filename}"
+    path = f"{s3_directory}/{full_filename}"
     return path
+
 
 def get_s3_file_url(path, ttl=604800):
     s3 = boto3.client('s3', REGION, config=Config(signature_version='s3v4'))
@@ -31,6 +37,75 @@ def get_s3_file_url(path, ttl=604800):
         ExpiresIn=ttl
     )
     return url
+
+
+def read_s3_body(bucket_name, object_name):
+    s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
+    body = s3_object['Body']
+    return body.read()
+
+
+def scan_header_file(bucket, path):
+    """
+    Create a python dict from a fits-header-formatted text file in s3.
+
+    :param bucket: String name of s3 bucket.
+    :param path: String path to a text file in the bucket. 
+        note - this file is assumed to be formatted as a fits header.
+    :return: dictionary representation the fits header txt file.
+    """
+    data_entry = {}
+    fits_line_length = 80
+
+    contents = read_s3_body(bucket, path)
+    
+    for i in range(0, len(contents), fits_line_length):
+        single_header_line = contents[i:i+fits_line_length].decode('utf8')
+
+
+        # Split header lines according to the FITS header format
+        values = re.split('=|/|',single_header_line)
+        
+        # Get the attribute and value for each line in the header.
+        try:
+
+            # The first 8 characters contains the attribute.
+            attribute = single_header_line[:8].strip()
+            # The rest of the characters contain the value 
+            # (and sometimes a comment).
+            after_attr = single_header_line[10:-1]
+
+            # If the value (and not in a comment) is a string, then 
+            # we want the contents inside the single-quotes.
+            if "'" in after_attr.split('/')[0]:
+                value = after_attr.split("'")[1].strip()
+            
+            # Otherwise, get the string preceding a comment 
+            # (comments start with '/')
+            else: 
+                value = after_attr.split("/")[0].strip()
+
+            # Add the attribute/value to a dict
+            data_entry[attribute] = value
+
+            if attribute == 'END': break
+        
+        except Exception as e:
+            logger.exception(f"Error with parsing fits header: {e}")
+
+    # Add the JSON representation of the data_entry to itself as the 
+    # header attribute
+    data_entry['JSON'] = json.dumps(data_entry)
+    return data_entry
+
+
+def get_header_from_fits(bucket, key):
+    file_url = s3_c.generate_presigned_url('get_object', Params={"Bucket": bucket, "Key": key})
+    fits_file = fits.open(file_url)
+    header = dict(fits_file[0].header)
+    header['JSON'] = json.dumps(header)
+    return header
+
 
 
 def parse_file_key(file_key):
@@ -62,15 +137,13 @@ def validate_base_filename(filename):
 
     parts = filename.split('-')
 
+    # check that the base filename has four sections separated by '-'
+    assert len(parts) == 4
+
     # check that the file starts with 3-letter site code 
     # like 'wmd'
     site = parts[0] 
     assert len(site) >= 3 and len(site) <=6
-
-    # check for 4-letter instrument name, 
-    # like 'ea03'
-    inst = parts[1]  
-    assert len(inst) == 4
 
     # check for date formatted as yyymmdd
     # like '20190621'
@@ -142,7 +215,7 @@ def get_site_from_base_filename(base_filename):
     return base_filename.split('-')[0]
 
 
-def s3_remove_base_filename(base_filename):
+def s3_remove_base_filename(base_filename, s3_directory='data'):
     """ Remove data matching the base_filename from s3.
 
     This typically includes the header .txt, jpgs, large and small .fits. 
@@ -150,20 +223,21 @@ def s3_remove_base_filename(base_filename):
     Args: 
         base_filename(str): specifies the files to delete from s3. 
             Example: wmd-ea03-20190621-00000007
+        s3_directory (str): this is the s3 'folder' the file is stored in. 
     """
 
     # first ensure that the base filename is in a valid format. 
     # otherwise, bad filenames might match with data that shouldn't be deleted.
     if validate_base_filename(base_filename): 
 
-        prefix_to_delete = f"data/{base_filename}"
+        prefix_to_delete = f"{s3_directory}/{base_filename}"
         print("prefix to delete: ")
         print(prefix_to_delete)
 
         # delete everything in the s3 bucket with the given prefix
         s3 = boto3.resource('s3')
         bucket = s3.Bucket(BUCKET_NAME)
-        response = bucket.objects.filter(Prefix=base_filename).delete()
+        response = bucket.objects.filter(Prefix=f"{s3_directory}/{base_filename}").delete()
         print("delete response: ")
         print(response)
 

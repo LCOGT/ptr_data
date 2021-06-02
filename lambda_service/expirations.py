@@ -16,7 +16,7 @@ from lambda_service.helpers import validate_filename
 from lambda_service.db import db_remove_base_filename
 
 EXPIRATION_TABLE_NAME = os.getenv('EXPIRATION_TABLE', 'data-expiration-tracker')
-dynamodb = boto3.resource('dynamodb')
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv('REGION'))
 expiration_table= dynamodb.Table(EXPIRATION_TABLE_NAME)
 
 
@@ -61,7 +61,7 @@ def get_image_lifespan(full_filename):
         return 86400  # One day for EF (focus) data
 
 
-def add_expiration_entry(base_filename, time_to_live_s):
+def add_expiration_entry(base_filename, time_to_live_s, s3_directory='data'):
     """ Add an entry to the expiration table.
 
     This table is responsible for tracking the data that will expire, and 
@@ -73,11 +73,13 @@ def add_expiration_entry(base_filename, time_to_live_s):
     Args: 
         base_filename(str): wmd-ea03-20190621-00000007
         time_to_live_s (int): number of seconds before dynamodb can begin the deletion process
+        s3_directory (str): this is the 'folder' in s3 that contains the file(s). (data, info-images, allsky, ...)
 
     """
 
     entry = {
         'pk': base_filename,
+        's3_directory': s3_directory,
         'expiration_timestamp_s': int(time.time() + time_to_live_s)
     }
 
@@ -94,14 +96,28 @@ def add_expiration_entry(base_filename, time_to_live_s):
 
 
 def remove_expired_data_handler(event, context):
+    print(event)
     records_to_delete = event['Records']
     for record in records_to_delete:
 
         if record["eventName"] != "REMOVE": 
             continue
 
-        base_filename = record["dynamodb"]["Keys"]["pk"]["S"]
+        s3_directory = record["dynamodb"]["OldImage"]["s3_directory"]["S"]
+        print(s3_directory)
 
-        s3_remove_base_filename(base_filename)
-        db_remove_base_filename(base_filename)
+        if s3_directory == 'data':
+            base_filename = record["dynamodb"]["Keys"]["pk"]["S"]
+            s3_remove_base_filename(base_filename, s3_directory)
+            db_remove_base_filename(base_filename)
+
+        elif s3_directory == 'info-images':
+            base_filename = record["dynamodb"]["Keys"]["pk"]["S"]
+            s3_remove_base_filename(base_filename, s3_directory)
+
+        else:
+            print(f"unknown s3 directory: {s3_directory}. Not removing {base_filename}.") 
+
+
+        
     

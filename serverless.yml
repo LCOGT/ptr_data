@@ -12,15 +12,19 @@ package:
   exclude:
     - venv/**
     - node_modules/**
+    - notebooks/**
     - __pycache__/**
     - .pytest_cache/**
     - .env
     - database.ini
     - lambda_tests.txt
+    - lambda_service/tests/**
 
 custom: 
   # This is to reduce the size of the deployment
   pythonRequirements:
+    dockerizePip: non-linux
+    dockerFile: serverless-deploy-helpers/Dockerfile
     useDownloadCache: false
     useStaticCache: false
     slim: true
@@ -34,6 +38,7 @@ provider:
     BUCKET_NAME: photonranch-001
     SUBSCRIBERS_TABLE: photonranch-data-subscribers1
     EXPIRATION_TABLE: data-expiration-tracker
+    INFO_IMAGES_TABLE: info-images
     WSS_URL:
       Fn::Join:
         - ""
@@ -48,11 +53,7 @@ provider:
           - s3:PutBucketNotification
           - s3:ListBucket
           - s3:DeleteObject
-      Resource:
-        Fn::Join:
-          - ""
-          - - "arn:aws:s3:::"
-            - ${self:provider.environment.BUCKET_NAME}
+      Resource: "arn:aws:s3:::${self:provider.environment.BUCKET_NAME}"
 
     - Effect: Allow
       Action:
@@ -92,12 +93,24 @@ functions:
   insert_data:
     handler: lambda_service/insert_data.handle_s3_object_created
     layers:
-      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:8
+      #- arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:8
+      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:18
     events:
-      - existingS3:
+      - s3:
           bucket: ${self:provider.environment.BUCKET_NAME}
-          events: 
-          - s3:ObjectCreated:* 
+          event: s3:ObjectCreated:* 
+          rules: 
+            - prefix: data/
+          existing: true
+  insertInfoImage:
+    handler: lambda_service/info_images.handle_info_image_created
+    events:
+      - s3:
+          bucket: ${self:provider.environment.BUCKET_NAME}
+          event: s3:ObjectCreated:* 
+          rules: 
+            - prefix: info-images/
+          existing: true
 
   connectionManager:
     handler: lambda_service/handler.connection_manager

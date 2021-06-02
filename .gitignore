@@ -14,3 +14,6 @@ database.ini
 node_modules/
 .serverless/
 
+# Developer Resources
+.devcontainer/
+notebooks/
