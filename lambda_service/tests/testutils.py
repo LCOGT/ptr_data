@@ -5,7 +5,7 @@ import os
 import datetime
 import random
 from astropy.io import fits
-from skimage.io import imsave
+from PIL import Image
 
 
 def to_bz2(filename):
@@ -35,7 +35,6 @@ def make_header(extras={}):
 
 
 def make_data_files(data=None, header_dict={}, savedirectory="lambda_service/tests/testing_data"):
-    print('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
     print(os.getcwd())
     filename = f"{savedirectory}/testdata.fits"
 
@@ -65,7 +64,8 @@ def make_data_files(data=None, header_dict={}, savedirectory="lambda_service/tes
     #jpg_data = Stretch().stretch(positive_jpg_data)  # stretch
     jpg_data = positive_jpg_data
     jpg_8 = (jpg_data * 256).astype('uint8')  # convert to 8-bit int for jpg
-    imsave(f"{savedirectory}/testdata.jpg", jpg_8)
+    im = Image.fromarray(jpg_8)
+    im.save(f"{savedirectory}/testdata.jpg")
 
     # write fits file
     hdu.writeto(filename, overwrite=True)

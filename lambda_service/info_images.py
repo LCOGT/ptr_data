@@ -1,9 +1,7 @@
 import urllib.parse
-import json
 import boto3 
 import logging
 import os
-import re
 import time
 from botocore.exceptions import ClientError
 
