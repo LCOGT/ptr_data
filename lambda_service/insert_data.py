@@ -14,7 +14,10 @@ from lambda_service.expirations import add_expiration_entry
 from lambda_service.expirations import data_type_has_expiration
 from lambda_service.expirations import get_image_lifespan
 
+from lambda_service.thumbnails import resize_handler
+
 from lambda_service.handler import sendToSubscribers
+from lambda_service.datastreamer import send_to_datastream
 
 import logging
 logger = logging.getLogger()
@@ -78,14 +81,30 @@ def handle_s3_object_created(event, context):
         header_data = scan_header_file(bucket, file_path)
         # Update the database
         update_header_data(DB_ADDRESS, base_filename, data_type, header_data)
+
     # If the new file is an image (jpg or fits)
-    elif file_extension in ['jpg', 'fits']:
+    #elif file_extension in ['jpg', 'fits']:
+    elif file_extension == 'fits':
         update_new_image(DB_ADDRESS, base_filename, data_type, reduction_level, file_extension)
 
         # Fallback on the fits file for the header data if the header has not yet been supplied
-        if file_extension=='fits' and not header_data_exists(DB_ADDRESS, base_filename):
+        if not header_data_exists(DB_ADDRESS, base_filename):
             header_data = get_header_from_fits(bucket, file_path)
             update_header_data(DB_ADDRESS, base_filename, data_type, header_data)
+
+    elif file_extension == 'jpg':
+        update_new_image(DB_ADDRESS, base_filename, data_type, reduction_level, file_extension)
+
+        # generate thumbnail from the larger jpg
+        if reduction_level == "10":
+            thumbnail_key = f"{file_path.split('/')[0]}/{site}-{instrument}-{file_date}-{file_counter}-{data_type}11.jpg"
+            thumbnail_height = 128  # height in pixels for the rescaling output
+            try:
+                resize_handler(bucket, file_path, thumbnail_key, thumbnail_height)
+            except Exception as e:
+                logger.exception(e)
+                pass  
+
 
     # Unknown file extension:
     else: 
@@ -94,14 +113,19 @@ def handle_s3_object_created(event, context):
     # After we update the database, notify subscribers.
     try:
         logger.info('sending to subscribers: ')
+
+        # This is the old websocket method. Should be deprecated once the datastreamer
+        # service is fully integrated.
         websocket_payload = {
             "s3_directory": "data",
             "base_filename": base_filename,
             "site": site
         }
-        sendToSubscribers(websocket_payload)
+        #sendToSubscribers(websocket_payload)
+
+        # This is the new way to stream data. Remove the websocket from this repository
+        # once this method is integrated across the PTR stack. 
+        send_to_datastream(site, websocket_payload)
+
     except Exception as e:
         logger.exception(f'failed to send to subscribers: {str(e)}')
-
-
-

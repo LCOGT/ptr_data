@@ -1,9 +1,11 @@
 import numpy as np
-import time
+import json
+import requests
 import bz2
 import os
 import datetime
 import random
+import time
 from astropy.io import fits
 from PIL import Image
 
@@ -73,3 +75,39 @@ def make_data_files(data=None, header_dict={}, savedirectory="lambda_service/tes
     # write bz2 fits file
     to_bz2(filename)
 
+
+def get_upload_url(filename, s3_directory, info_channel=None):
+    request_body = {
+        "object_name": filename,
+        "s3_directory": s3_directory,
+    }
+    if info_channel is not None:
+        request_body['info_channel'] = info_channel
+    url = "https://api.photonranch.org/test/upload"
+    response = requests.post(url, json.dumps(request_body))
+    return response.json()
+
+
+def upload_files(filename_list, s3dir, info_channel=None):
+    for f in filename_list:
+        upload_url = get_upload_url(f[0], s3dir, info_channel)
+        with open(f[1], 'rb') as base_file:
+            data = {'file': (f[0], base_file)}
+            upload_response = requests.post(
+                upload_url["url"], upload_url["fields"], files=data)
+            print(f'uploading {upload_url["fields"]["key"]}')
+            print(upload_response)
+
+
+def get_s3_event(key):
+    """ simulate the event that is provided to the lambda handler when s3 detects a new item """
+    return {
+        'Records': [
+            {
+                's3': {
+                    'bucket': { 'name': 'photonranch-001' },
+                    'object': { 'key': key }
+                }
+            }
+        ]
+    }

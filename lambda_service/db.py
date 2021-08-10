@@ -91,6 +91,7 @@ class Image(Base):
     fits_01_exists    = Column(Boolean)
     fits_10_exists    = Column(Boolean)
     jpg_medium_exists = Column(Boolean)
+    jpg_small_exists  = Column(Boolean)
 
 
 
@@ -129,6 +130,7 @@ class Image(Base):
             "fits_01_exists": self.fits_01_exists,
             "fits_10_exists": self.fits_10_exists,
             "jpg_medium_exists": self.jpg_medium_exists,
+            "jpg_small_exists": self.jpg_small_exists,
 
             "username": self.username,
             "user_id": self.user_id,
@@ -138,12 +140,19 @@ class Image(Base):
         package["capture_date"] = int(1000 * self.capture_date.timestamp())
         package["sort_date"] = int(1000 * self.sort_date.timestamp())
 
-        # Include a url to the jpg
+        # Include a url to the medium jpg
         package["jpg_url"] = ""
         if self.jpg_medium_exists:
             path = get_s3_image_path("data", self.base_filename, self.data_type, "10", "jpg")
             url = get_s3_file_url(path)
             package["jpg_url"] = url
+
+        # Include a url to the small jpg
+        package["jpg_thumbnail_url"] = ""
+        if self.jpg_small_exists:
+            path = get_s3_image_path("data", self.base_filename, self.data_type, "11", "jpg")
+            url = get_s3_file_url(path)
+            package["jpg_thumbnail_url"] = url
 
         return package
 
@@ -206,16 +215,19 @@ def update_new_image(db_address:str, base_filename:str, data_type:str, reduction
 
     # Define the 'reduction_level' values that signify different image types
     medium_jpg_reduction_values = ["10", "13"]
+    small_jpg_reduction_values = ["11"]
     fits_10_reduction_values = ["10", "13"]
     fits_01_reduction_values = ["00", "01"]
 
     file_exists_column = None 
     if filetype == "jpg" and reduction_level in medium_jpg_reduction_values:
         file_exists_column = "jpg_medium_exists"
+    elif filetype == "jpg" and reduction_level in small_jpg_reduction_values:
+        file_exists_column = "jpg_small_exists"
     elif filetype == "fits" and reduction_level in fits_01_reduction_values:
-            file_exists_column = "fits_01_exists"
+        file_exists_column = "fits_01_exists"
     elif filetype == "fits" and reduction_level in fits_10_reduction_values:
-            file_exists_column = "fits_10_exists"
+        file_exists_column = "fits_10_exists"
     
     if file_exists_column is None:
         print(f"Unknown filetype added: {base_filename}, {data_type}, {reduction_level}, {filetype}")

@@ -11,6 +11,8 @@ from lambda_service.handler import sendToSubscribers
 from lambda_service.helpers import validate_filename, parse_file_key, get_base_filename_from_full_filename
 from lambda_service.helpers import scan_header_file
 
+from lambda_service.datastreamer import send_to_datastream
+
 dynamodb = boto3.resource("dynamodb", region_name=os.getenv('REGION'))
 info_table = dynamodb.Table(os.getenv('INFO_IMAGES_TABLE'))
 
@@ -140,13 +142,21 @@ def handle_info_image_created(event, context):
     # After we update the database, notify subscribers.
     try:
         logger.info('sending to subscribers: ')
+
+        # This is the old websocket method. Should be deprecated once the datastreamer
+        # service is fully integrated.
         websocket_payload = {
             "s3_directory": "info-images",
             "base_filename": base_filename,
             "site": site,
             "channel": channel_number,
         }
-        sendToSubscribers(websocket_payload)
+        #sendToSubscribers(websocket_payload)
+
+        # This is the new way to stream data. Remove the websocket from this repository
+        # once this method is integrated across the PTR stack. 
+        send_to_datastream(site, websocket_payload)
+
     except Exception as e:
         logger.exception(f'failed to send to subscribers: {str(e)}')
 

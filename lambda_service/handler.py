@@ -61,6 +61,7 @@ def _remove_connection(connectionID):
 def _send_to_connection(gatewayClient, connection_id, data, wss_url):
     return gatewayClient.post_to_connection(
         ConnectionId=connection_id,
+        # This is an unnecessarily verbose message. Just send the plain `data`. 
         Data=json.dumps({"messages":[{"content": data}]}).encode('utf-8')
     )
 

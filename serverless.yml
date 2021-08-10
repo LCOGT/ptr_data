@@ -9,30 +9,34 @@ plugins:
   - serverless-python-requirements
 
 package:
-  exclude:
-    - venv/**
-    - node_modules/**
-    - notebooks/**
-    - __pycache__/**
-    - .pytest_cache/**
-    - .env
-    - database.ini
-    - lambda_tests.txt
-    - lambda_service/tests/**
+  patterns:
+    - '!venv/**'
+    - '!node_modules/**'
+    - '!notebooks/**'
+    - '!__pycache__/**'
+    - '!.pytest_cache/**'
+    - '!.env'
+    - '!database.ini'
+    - '!lambda_tests.txt'
+    - '!lambda_service/tests/**'
 
 custom: 
   # This is to reduce the size of the deployment
   pythonRequirements:
     dockerizePip: non-linux
     dockerFile: serverless-deploy-helpers/Dockerfile
-    useDownloadCache: false
-    useStaticCache: false
+    strip: false
     slim: true
+    noDeploy:
+      - pytest
+      - pytest-env
+      #- psycopg2
 
 provider:
   name: aws
   region: us-east-1
   runtime: python3.7
+  lambdaHashingVersion: 20201221
   environment: 
     REGION: ${self:provider.region}
     BUCKET_NAME: photonranch-001
@@ -46,46 +50,59 @@ provider:
           - Ref: "WebsocketsApi"
           - ".execute-api.us-east-1.amazonaws.com/dev"
 
-  iamRoleStatements:
-    - Effect: "Allow"
-      Action:
-          - s3:GetBucketNotification
-          - s3:PutBucketNotification
-          - s3:ListBucket
-          - s3:DeleteObject
-      Resource: "arn:aws:s3:::${self:provider.environment.BUCKET_NAME}"
+  iam:
+    role:
+      name: ptrdata-default-iam-role
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:GetBucketNotification
+            - s3:PutBucketNotification
+            - s3:ListBucket
+            - s3:DeleteObject
+            - s3:GetObject  
+            - s3:PutObject
+          Resource: 
+            - "arn:aws:s3:::${self:provider.environment.BUCKET_NAME}"
+            - "arn:aws:s3:::${self:provider.environment.BUCKET_NAME}/*"
 
-    - Effect: Allow
-      Action:
-        - ssm:GetParameter
-      Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/*"
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+          Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/*"
 
-    - Effect: Allow 
-      Action: 
-        - "execute-api:ManageConnections"
-      Resource:
-        - "arn:aws:execute-api:*:*:**/@connections/*"
+        - Effect: Allow 
+          Action: 
+            - "execute-api:ManageConnections"
+          Resource: "arn:aws:execute-api:*:*:**/@connections/*"
 
-    - Effect: Allow 
-      Action: 
-        - dynamodb:PutItem
-        - dynamodb:GetItem
-        - dynamodb:UpdateItem
-        - dynamodb:DeleteItem
-        - dynamodb:BatchGetItem
-        - dynamodb:BatchWriteItem
-        - dynamodb:Scan
-        - dynamodb:Query
-        - dynamodb:DescribeStream
-        - dynamodb:GetRecords
-        - dynamodb:GetShardIterator
-        - dynamodb:ListStreams
-      Resource:
-        Fn::Join:
-          - ""
-          - - "arn:aws:dynamodb:"
-            - ${self:provider.region}
-            - ":*:*"
+        - Effect: Allow 
+          Action: 
+            - dynamodb:PutItem
+            - dynamodb:GetItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+            - dynamodb:ListStreams
+          Resource:
+            Fn::Join:
+              - ""
+              - - "arn:aws:dynamodb:"
+                - ${self:provider.region}
+                - ":*:*"
+
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:GetQueueUrl
+          Resource:
+            - "arn:aws:sqs:${self:provider.region}:*:*"
 
 
 functions:
@@ -93,8 +110,8 @@ functions:
   insert_data:
     handler: lambda_service/insert_data.handle_s3_object_created
     layers:
-      #- arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:8
       - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-SQLAlchemy:18
+      - arn:aws:lambda:us-east-1:770693421928:layer:Klayers-python38-Pillow:10
     events:
       - s3:
           bucket: ${self:provider.environment.BUCKET_NAME}
@@ -131,7 +148,7 @@ functions:
     events:
       - stream: 
           type: dynamodb
-          badtchSize: 1
+          batchSize: 1
           arn:
             Fn::GetAtt:
               - dataExpirationTracker
