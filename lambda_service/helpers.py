@@ -91,7 +91,7 @@ def scan_header_file(bucket, path):
             if attribute == 'END': break
         
         except Exception as e:
-            logger.exception(f"Error with parsing fits header: {e}")
+            print(f"Error with parsing fits header: {e}")
 
     # Add the JSON representation of the data_entry to itself as the 
     # header attribute
@@ -112,8 +112,12 @@ def parse_file_key(file_key):
     filename_no_extension, filename_extension = file_key.split('.', 1)  # only split on the first dot.
     filename_extension = filename_extension.split('.')[0]
     site, instrument, file_date, file_counter, data_type_level = filename_no_extension.split('-')
-    data_type = data_type_level[0:2]
-    reduction_level = data_type_level[2:4]
+
+    #data_type = data_type_level[0:2]
+    #reduction_level = data_type_level[2:4]
+    data_type = get_data_type_from_filename(file_key)
+    reduction_level = get_reduction_level_from_filename(file_key)
+
     base_filename = '-'.join([site, instrument, file_date, file_counter])
     return {
         "base_filename": base_filename,
@@ -172,14 +176,19 @@ def validate_filename(filename):
     extensions = parts[4]   
     extension_parts = extensions.split('.')
 
+
+    # This expression gets the first string of alpha chars and the next group of numeric chars.
+    obstype_reduction_level_re = re.compile("([a-zA-Z]+)([0-9]+)")
+    observation_type, reduction_level = obstype_reduction_level_re.match(extension_parts[0]).groups()
+
     # check for the data type (usually ex (exposure), sometimes ep (experiemental))
     # example value: 'EX'
-    data_type = extension_parts[0][0:2] 
-    assert len(data_type) == 2 and data_type.isalpha()
+    #data_type = extension_parts[0][0:2] 
+    assert observation_type and observation_type.isalpha()
 
     # check for the reduction_level, which directly follows the data_type.
     # example value: '01'
-    reduction_level = extension_parts[0][2:4]
+    #reduction_level = extension_parts[0][2:4]
     assert len(reduction_level) == 2 and reduction_level.isdigit()
 
     # check for a file extension that is letters only 
@@ -202,7 +211,18 @@ def get_base_filename_from_full_filename(full_filename):
 
 def get_data_type_from_filename(full_filename):
     assert validate_filename(full_filename) 
-    return full_filename.split('-')[4].split('.')[0][0:2]
+    #return full_filename.split('-')[4].split('.')[0][0:2]
+    obstype_reductionlevel = full_filename.split('-')[4].split('.')[0]
+    obstype_regex = re.compile("([a-zA-Z]+)([0-9]+)")
+    observation_type, _ = obstype_regex.match(obstype_reductionlevel).groups()
+    return observation_type
+
+def get_reduction_level_from_filename(full_filename):
+    assert validate_filename(full_filename)
+    obstype_reductionlevel = full_filename.split('-')[4].split('.')[0]
+    obstype_regex = re.compile("([a-zA-Z]+)([0-9]+)")
+    _, reduction_level = obstype_regex.match(obstype_reductionlevel).groups()
+    return reduction_level
 
 
 def get_site_from_filename(full_filename):

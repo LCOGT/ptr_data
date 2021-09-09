@@ -19,6 +19,18 @@ def test_parse_file_key_good_fits():
     assert file_parts['file_extension'] == 'fits'
     assert file_parts['base_filename'] == 'wmd-ea03-20190621-00000007'
 
+def test_parse_file_key_good_fits_2():
+    file_key = 'wmd-ea03-20190621-00000007-e00.fits.bz2'
+    file_parts = parse_file_key(file_key)
+    assert file_parts['site'] == 'wmd'
+    assert file_parts['instrument'] == 'ea03'
+    assert file_parts['file_date'] == '20190621'
+    assert file_parts['file_counter'] == '00000007'
+    assert file_parts['data_type'] == 'e'
+    assert file_parts['reduction_level'] == '00'
+    assert file_parts['file_extension'] == 'fits'
+    assert file_parts['base_filename'] == 'wmd-ea03-20190621-00000007'
+
 def test_parse_file_key_good_jpg():
     file_key = 'wmd-ea03-20190621-00000007-EX10.jpg'
     file_parts = parse_file_key(file_key)
