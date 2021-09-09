@@ -30,7 +30,6 @@ custom:
     noDeploy:
       - pytest
       - pytest-env
-      #- psycopg2
 
 provider:
   name: aws
@@ -40,16 +39,8 @@ provider:
   environment: 
     REGION: ${self:provider.region}
     BUCKET_NAME: photonranch-001
-    SUBSCRIBERS_TABLE: photonranch-data-subscribers1
     EXPIRATION_TABLE: data-expiration-tracker
     INFO_IMAGES_TABLE: info-images
-    WSS_URL:
-      Fn::Join:
-        - ""
-        - - "https://"
-          - Ref: "WebsocketsApi"
-          - ".execute-api.us-east-1.amazonaws.com/dev"
-
   iam:
     role:
       name: ptrdata-default-iam-role
@@ -70,11 +61,6 @@ provider:
           Action:
             - ssm:GetParameter
           Resource: "arn:aws:ssm:${self:provider.region}:*:parameter/*"
-
-        - Effect: Allow 
-          Action: 
-            - "execute-api:ManageConnections"
-          Resource: "arn:aws:execute-api:*:*:**/@connections/*"
 
         - Effect: Allow 
           Action: 
@@ -129,20 +115,6 @@ functions:
             - prefix: info-images/
           existing: true
 
-  connectionManager:
-    handler: lambda_service/handler.connection_manager
-    events:
-      - websocket:
-          route: $connect
-      - websocket:
-          route: $disconnect
-
-  defaultMessage:
-    handler: lambda_service/handler.default_message
-    events:
-      - websocket:
-          route: $default
-
   removeExpiredData:
     handler: lambda_service/expirations.remove_expired_data_handler
     events:
@@ -154,23 +126,8 @@ functions:
               - dataExpirationTracker
               - StreamArn
 
-
 resources:
   Resources:
-    # This table tracks websocket clients that recieve data updates.
-    dataSubscribers: 
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:provider.environment.SUBSCRIBERS_TABLE}
-        AttributeDefinitions:
-          - AttributeName: ConnectionID
-            AttributeType: S
-        KeySchema:
-          - AttributeName: ConnectionID
-            KeyType: HASH
-        ProvisionedThroughput:
-          ReadCapacityUnits: 1
-          WriteCapacityUnits: 1
 
     dataExpirationTracker: 
       Type: AWS::DynamoDB::Table

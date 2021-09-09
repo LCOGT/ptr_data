@@ -5,10 +5,7 @@ import os
 import time
 from botocore.exceptions import ClientError
 
-from lambda_service.expirations import add_expiration_entry
-from lambda_service.handler import sendToSubscribers
-
-from lambda_service.helpers import validate_filename, parse_file_key, get_base_filename_from_full_filename
+from lambda_service.helpers import validate_filename, parse_file_key
 from lambda_service.helpers import scan_header_file
 
 from lambda_service.datastreamer import send_to_datastream
@@ -80,20 +77,6 @@ def handle_info_image_created(event, context):
         else:  # undexpected error
             raise 
 
-    # s3 automatically removes info images after 24 hrs now.
-    #else: 
-        ## If the delete succeeded (we removed an older base_filename), then
-        ## add the old base_filename to the expirations table. 
-        #try: 
-            #prior_base_filename = delete_response['Attributes']['base_filename']
-        #except KeyError:
-            #prior_base_filename = base_filename
-        #print(f"prior_base_filename: {prior_base_filename}")
-
-        #if prior_base_filename != base_filename:
-            #time_to_live_s = 0  # expires now
-            #add_expiration_entry(prior_base_filename, time_to_live_s, 'info-images')
-
     # Compute the type of file-existence key to update the database with
     # eg. we might set "fits_01_exits" = True. 
     # TODO: maybe make this a list of files that exist, and update photonranch-api or ptr_ui to use that instead.
@@ -143,18 +126,12 @@ def handle_info_image_created(event, context):
     try:
         logger.info('sending to subscribers: ')
 
-        # This is the old websocket method. Should be deprecated once the datastreamer
-        # service is fully integrated.
         websocket_payload = {
             "s3_directory": "info-images",
             "base_filename": base_filename,
             "site": site,
             "channel": channel_number,
         }
-        #sendToSubscribers(websocket_payload)
-
-        # This is the new way to stream data. Remove the websocket from this repository
-        # once this method is integrated across the PTR stack. 
         send_to_datastream(site, websocket_payload)
 
     except Exception as e:

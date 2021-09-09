@@ -1,9 +1,7 @@
 import urllib.parse
 import boto3
 import os
-import json
 
-from lambda_service.handler import _remove_connection
 from lambda_service.db import update_header_data, update_new_image, header_data_exists
 from lambda_service.db import DB_ADDRESS
 
@@ -16,7 +14,6 @@ from lambda_service.expirations import get_image_lifespan
 
 from lambda_service.thumbnails import resize_handler
 
-from lambda_service.handler import sendToSubscribers
 from lambda_service.datastreamer import send_to_datastream
 
 import logging
@@ -113,18 +110,11 @@ def handle_s3_object_created(event, context):
     # After we update the database, notify subscribers.
     try:
         logger.info('sending to subscribers: ')
-
-        # This is the old websocket method. Should be deprecated once the datastreamer
-        # service is fully integrated.
         websocket_payload = {
             "s3_directory": "data",
             "base_filename": base_filename,
             "site": site
         }
-        #sendToSubscribers(websocket_payload)
-
-        # This is the new way to stream data. Remove the websocket from this repository
-        # once this method is integrated across the PTR stack. 
         send_to_datastream(site, websocket_payload)
 
     except Exception as e:

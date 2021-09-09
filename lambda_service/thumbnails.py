@@ -1,8 +1,5 @@
-import os
 import boto3
-import sys
 import uuid
-from urllib.parse import unquote_plus
 import PIL
 from PIL import Image
 
