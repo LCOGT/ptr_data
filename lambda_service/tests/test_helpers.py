@@ -6,6 +6,8 @@ from lambda_service.helpers import validate_base_filename
 from lambda_service.helpers import get_data_type_from_filename
 from lambda_service.helpers import get_site_from_filename
 from lambda_service.helpers import get_base_filename_from_full_filename
+from lambda_service.helpers import isodate_to_timestamp
+from lambda_service.helpers import timestamp_to_isodate_utc
 
 def test_parse_file_key_good_fits():
     file_key = 'wmd-ea03-20190621-00000007-EX00.fits.bz2'
@@ -104,3 +106,12 @@ def test_get_site_from_filename_bad():
     bad_filename = 'bad_filename'
     with pytest.raises(AssertionError):
         get_base_filename_from_full_filename(bad_filename)
+
+def test_isodate_to_timestamp_and_back():
+    isodate = "2020-01-01T12:00:00Z"
+    assert timestamp_to_isodate_utc(isodate_to_timestamp(isodate)) == isodate
+
+def test_timestamp_to_isodate_and_back():
+    timestamp = 1642542786.453328
+    assert isodate_to_timestamp(timestamp_to_isodate_utc(timestamp)) == timestamp
+    

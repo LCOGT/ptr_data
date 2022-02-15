@@ -7,14 +7,13 @@ from lambda_service.db import DB_ADDRESS
 
 from lambda_service.helpers import validate_filename, parse_file_key
 from lambda_service.helpers import scan_header_file, get_header_from_fits
-
+from lambda_service.helpers import isodate_to_timestamp
 from lambda_service.expirations import add_expiration_entry
 from lambda_service.expirations import data_type_has_expiration
 from lambda_service.expirations import get_image_lifespan
-
 from lambda_service.thumbnails import resize_handler
-
 from lambda_service.datastreamer import send_to_datastream
+from lambda_service.s3_log import log_new_upload
 
 import logging
 logger = logging.getLogger()
@@ -22,6 +21,10 @@ logger.setLevel(logging.INFO)
 
 dynamodb = boto3.resource("dynamodb", region_name=os.getenv('REGION'))
 s3_c = boto3.client('s3', region_name=os.getenv('REGION'))
+
+info_image_lifetime_hours = os.getenv('INFO_IMAGE_TTL_HOURS', 48)
+info_image_lifetime_s = info_image_lifetime_hours * 3600
+jpg_thumbnail_height_px = os.getenv('JPG_THUMBNAIL_HEIGHT_PX', 128)
 
 def handle_s3_object_created(event, context):
 
@@ -35,6 +38,11 @@ def handle_s3_object_created(event, context):
             event['Records'][0]['s3']['object']['key'], 
             encoding='utf-8'
         )
+
+    # Do the logging routine for new files that arrive in s3
+    event_time = isodate_to_timestamp(event['Records'][0]['eventTime'])
+    object_size = event['Records'][0]['s3']['object']['size']
+    log_new_upload(file_path, event_time, object_size)
     
     # Format amazon upload timestamp (yyyy-mm-ddThh:mm:ss.mmmZ) 
     # to psql timestamp without timezone (yyyy-mm-dd hh:mm:ss).
@@ -95,7 +103,7 @@ def handle_s3_object_created(event, context):
         # generate thumbnail from the larger jpg
         if reduction_level == "10":
             thumbnail_key = f"{file_path.split('/')[0]}/{site}-{instrument}-{file_date}-{file_counter}-{data_type}11.jpg"
-            thumbnail_height = 128  # height in pixels for the rescaling output
+            thumbnail_height = jpg_thumbnail_height_px  # height in pixels for the rescaling output
             try:
                 resize_handler(bucket, file_path, thumbnail_key, thumbnail_height)
             except Exception as e:

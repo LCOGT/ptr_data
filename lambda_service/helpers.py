@@ -2,6 +2,8 @@ import boto3
 import os
 import re
 import json
+import dateutil
+import datetime
 from astropy.io import fits
 from botocore.client import Config
 
@@ -43,6 +45,23 @@ def read_s3_body(bucket_name, object_name):
     s3_object = s3_c.get_object(Bucket=bucket_name, Key=object_name)
     body = s3_object['Body']
     return body.read()
+
+    
+def isodate_to_timestamp(isodate):
+    parsed_t = dateutil.parser.parse(isodate)
+    t_in_seconds = parsed_t.timestamp()
+    return t_in_seconds
+
+def timestamp_to_isodate_utc(timestamp: float):
+    utc_date = datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc)
+    return utc_date.isoformat().replace('+00:00', 'Z')
+
+def filesize_readable(num, suffix="B"):
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
 
 
 def scan_header_file(bucket, path):

@@ -12,6 +12,7 @@ from lambda_service.datastreamer import send_to_datastream
 
 dynamodb = boto3.resource("dynamodb", region_name=os.getenv('REGION'))
 info_table = dynamodb.Table(os.getenv('INFO_IMAGES_TABLE'))
+info_images_ttl_s = int(os.getenv('INFO_IMAGES_TTL_HOURS')) * 3600
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -91,8 +92,7 @@ def handle_info_image_created(event, context):
         file_exists_key = f"other_{file_extension}_{reduction_level}_exists"
 
     # define dynamodb entry expiration time (timestamp, seconds)
-    seconds_per_day = 60 * 60 * 24
-    expiration_timestamp = int(time.time()) + (2 * seconds_per_day)  # 2 days from the present
+    expiration_timestamp = int(time.time()) + info_images_ttl_s # 2 days from the present
     
     # Update the info-images table with the new data
     # This will create a new record if one does not currently exist. 

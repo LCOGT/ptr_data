@@ -40,7 +40,11 @@ provider:
     REGION: ${self:provider.region}
     BUCKET_NAME: photonranch-001
     EXPIRATION_TABLE: data-expiration-tracker
+    UPLOADS_LOG_TABLE: recent-uploads-log
+    UPLOADS_LOG_TTL_HOURS: 48
     INFO_IMAGES_TABLE: info-images
+    INFO_IMAGES_TTL_HOURS: 48
+    JPG_THUMBNAIL_HEIGHT_PX: 128
   iam:
     role:
       name: ptrdata-default-iam-role
