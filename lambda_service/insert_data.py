@@ -24,7 +24,7 @@ s3_c = boto3.client('s3', region_name=os.getenv('REGION'))
 
 info_image_lifetime_hours = os.getenv('INFO_IMAGE_TTL_HOURS', 48)
 info_image_lifetime_s = info_image_lifetime_hours * 3600
-jpg_thumbnail_height_px = os.getenv('JPG_THUMBNAIL_HEIGHT_PX', 128)
+jpg_thumbnail_height_px = int(os.getenv('JPG_THUMBNAIL_HEIGHT_PX', 128))
 
 def handle_s3_object_created(event, context):
 
