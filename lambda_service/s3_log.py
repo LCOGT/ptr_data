@@ -31,7 +31,9 @@ def log_new_upload(filename: str, upload_timestamp_s: int, size_bytes: int):
     add_to_recent_uploads_log(filename, upload_timestamp_s, size_bytes, site)
 
     if site is not 'unknown_site':
-        send_new_upload_to_site_activity_log(filename, upload_timestamp_s, size_bytes, site)
+        pass
+        # Dropping this functionality for now as it clutters the log. 
+        #send_new_upload_to_site_activity_log(filename, upload_timestamp_s, size_bytes, site)
 
 
 def add_to_recent_uploads_log(filename: str, upload_timestamp_s: int, size_bytes: int, site: str):
