@@ -171,8 +171,10 @@ def update_header_data(db_address, base_filename, data_type, header_data):
     # specific header values to add to update columns:
     updates = {
         "header": header_data.get('JSON'),
-        "right_ascension": header_data.get('OBJCTRA'),
-        "declination": header_data.get('OBJCTDEC'),
+        #"right_ascension": header_data.get('OBJCTRA'), # These are the old RA and Dec reported
+        #"declination": header_data.get('OBJCTDEC'),
+        "right_ascension": header_data.get('RAHRS'), # These are the preferred RA field
+        "declination": header_data.get('DEC'),       # These are the preferred DEC field
         "altitude": header_data.get('ALTITUDE'),
         "azimuth": header_data.get('AZIMUTH'),
         "filter_used": header_data.get('FILTER'),
