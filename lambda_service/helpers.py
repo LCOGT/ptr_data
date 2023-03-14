@@ -64,7 +64,7 @@ def filesize_readable(num, suffix="B"):
     return f"{num:.1f}Yi{suffix}"
 
 
-def scan_header_file(bucket, path):
+def scan_header_file(bucket, path) -> dict:
     """
     Create a python dict from a fits-header-formatted text file in s3.
 

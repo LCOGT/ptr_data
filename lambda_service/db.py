@@ -39,6 +39,9 @@ def get_secret(key):
     )
     return resp['Parameter']['Value']
 
+class MissingFitsHeaderKey(Exception):
+    pass
+
 DB_ADDRESS = get_secret('db-url')
 
 
@@ -166,15 +169,31 @@ def header_data_exists(db_address, base_filename):
     return header_exists
         
 
-def update_header_data(db_address, base_filename, data_type, header_data):
+def update_header_data(db_address: str, base_filename: str, data_type: str, header_data: dict):
+
+    if 'CRVAL1' in header_data:
+        right_ascension = header_data['CRVAL1']
+    # This is to smooth the transition to the new fits header vals (March2023). We should remove this once all sites
+    # are using CRVAL1 for right ascension. 
+    elif 'RAHRS' in header_data:
+        right_ascension = header_data['RAHRS']
+    else: 
+        raise MissingFitsHeaderKey('Fits header is missing CRVAL1 and RAHRS used to set the right ascension.')
+        
+    if 'CRVAL2' in header_data:
+        declination = header_data['CRVAL2']
+    # This is to smooth the transition to the new fits header vals (March2023). We should remove this once all sites
+    # are using CRVAL2 for declination. 
+    elif 'DEC' in header_data:
+        declination = header_data['DEC']
+    else:
+        raise MissingFitsHeaderKey('Fits header is missing CRVAL2 and DEC used to set the declination.')
 
     # specific header values to add to update columns:
     updates = {
         "header": header_data.get('JSON'),
-        #"right_ascension": header_data.get('OBJCTRA'), # These are the old RA and Dec reported
-        #"declination": header_data.get('OBJCTDEC'),
-        "right_ascension": header_data.get('RAHRS'), # These are the preferred RA field
-        "declination": header_data.get('DEC'),       # These are the preferred DEC field
+        "right_ascension": right_ascension,
+        "declination": declination,
         "altitude": header_data.get('ALTITUDE'),
         "azimuth": header_data.get('AZIMUTH'),
         "filter_used": header_data.get('FILTER'),
