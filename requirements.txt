@@ -1,4 +1,4 @@
-astropy==4.2.1
+astropy==5.3.3
 attrs==21.2.0
 boto3==1.17.85
 botocore==1.20.85
